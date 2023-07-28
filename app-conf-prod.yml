@@ -1,0 +1,25 @@
+mode.production: true
+
+app.name: "gatekeeper"
+
+server:
+  port: 7070
+  gracefulShutdownTimeSec: 5
+  perf.enabled: false
+
+consul:
+  enabled: true
+  consulAddress: consul:8500
+  healthCheckUrl: /health
+  healthCheckInterval: 120s
+  healthCheckTimeout: 120s
+  healthCheckFailedDeregisterAfter: 5s
+
+tracing.propagation.keys:
+  - id
+  - userno
+  - username
+  - role
+  - roleno
+
+logging.rolling.file: "/usr/src/logs/${app.name}.log"

@@ -1,0 +1,23 @@
+mode.production: false
+
+app.name: "gatekeeper"
+
+server:
+  port: 7070
+  gracefulShutdownTimeSec: 5
+  perf.enabled: false
+
+consul:
+  enabled: true
+  consulAddress: localhost:8500
+  healthCheckUrl: /health
+  healthCheckInterval: 120s
+  healthCheckTimeout: 120s
+  healthCheckFailedDeregisterAfter: 120s
+
+tracing.propagation.keys:
+  - id
+  - userno
+  - username
+  - role
+  - roleno
