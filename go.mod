@@ -2,12 +2,9 @@ module github.com/curtisnewbie/gatekeeper
 
 go 1.18
 
-replace github.com/curtisnewbie/gocommon => /Users/photon/dev/git/gocommon
-
 require (
-	github.com/curtisnewbie/gocommon v0.0.0-20230724152934-b8f8615b745e
+	github.com/curtisnewbie/gocommon v0.0.0-20230728150817-9431d83c5629
 	github.com/gin-gonic/gin v1.8.1
-	github.com/sirupsen/logrus v1.9.0
 )
 
 require (
@@ -49,6 +46,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.5 // indirect
 	github.com/rabbitmq/amqp091-go v1.5.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
+	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/spf13/afero v1.9.2 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect

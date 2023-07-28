@@ -1,13 +1,10 @@
 package gatekeeper
 
 import (
-	"strings"
-
 	"github.com/curtisnewbie/gocommon/client"
 	"github.com/curtisnewbie/gocommon/common"
 	"github.com/curtisnewbie/gocommon/server"
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -30,7 +27,7 @@ func prepareServer() {
 
 	server.RawAny("/proxy/*proxyPath", func(c *gin.Context, ec common.ExecContext) {
 		filters := GetFilters()
-		for i, _ := range filters {
+		for i := range filters {
 			if err := filters[i](c, ec); err != nil {
 				server.DispatchErrJson(c, err)
 				return
@@ -40,14 +37,14 @@ func prepareServer() {
 		// parse the relatvie url, extract serviceName, and the relative url for the backend server
 		sp, err := parseServicePath(c.Request.URL.Path)
 		if err != nil {
-			server.DispatchErrJson(c, err)
+			ec.Log.Warnf("Invalid request, %v", err)
+			c.AbortWithStatus(404)
 			return
 		}
 
 		// route requests dynamically using service discovery
 		cli := client.NewDynTClient(ec, sp.Path, sp.ServiceName).
-			EnableTracing().
-			EnableRequestLog()
+			EnableTracing()
 
 		// propagate all headers to client
 		for k, arr := range c.Request.Header {
@@ -66,10 +63,8 @@ func prepareServer() {
 			r = cli.Post(c.Request.Body)
 		case "DELETE":
 			r = cli.Delete(nil)
-		}
-
-		if r == nil {
-			server.DispatchErrJson(c, errPathNotFound)
+		default:
+			c.AbortWithStatus(404)
 			return
 		}
 
@@ -80,15 +75,15 @@ func prepareServer() {
 		defer r.Close()
 
 		// headers from backend servers
-		rh := map[string]string{}
+		respHeader := map[string]string{}
 		for k, v := range r.RespHeader {
 			if len(v) > 0 {
-				rh[k] = v[0]
+				respHeader[k] = v[0]
 			}
 		}
 
 		// write data from backend to client
-		c.DataFromReader(r.StatusCode, r.Resp.ContentLength, c.GetHeader("Content-Type"), r.Resp.Body, rh)
+		c.DataFromReader(r.StatusCode, r.Resp.ContentLength, c.GetHeader("Content-Type"), r.Resp.Body, respHeader)
 	})
 }
 
@@ -98,20 +93,28 @@ type ServicePath struct {
 }
 
 func parseServicePath(url string) (ServicePath, error) {
-	url = strings.Replace(url, "/proxy/", "", 1)
+	// /proxy/...
+	striped := []rune(url)[7:]
 
-	logrus.Infof("url: %v", url)
-	tkn := strings.SplitN(url, "/", 2)
-	if len(tkn) < 2 {
+	// root path, invalid request
+	if len(striped) < 1 {
 		return ServicePath{}, errPathNotFound
 	}
 
-	for _, v := range tkn {
-		logrus.Infof("tkn: %v", v)
+	start := 0
+	for i := range striped {
+		if striped[i] == '/' && i > 0 {
+			start = i
+			break
+		}
+	}
+
+	if start < 1 {
+		return ServicePath{}, errPathNotFound
 	}
 
 	return ServicePath{
-		ServiceName: tkn[0],
-		Path:        tkn[1],
+		ServiceName: string(striped[0:start]),
+		Path:        string(striped[start:]),
 	}, nil
 }
