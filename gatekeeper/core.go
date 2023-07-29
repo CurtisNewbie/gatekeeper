@@ -11,44 +11,64 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type ServicePath struct {
+	ServiceName string
+	Path        string
+}
+
+// -----------------------------------------------------------
+
 var (
 	errPathNotFound = common.NewWebErr("Path not found")
 )
 
+// -----------------------------------------------------------
+
 // Bootstrap Gatekeeper
 func Bootstrap(args []string) {
+	prepareFilters()
 	prepareServer()
 	server.BootstrapServer(args)
 }
 
 func prepareServer() {
 
-	// make sure the trace propagation is disabled
-	server.PostServerBootstrapped(func(c common.ExecContext) error {
-		common.SetProp(common.PROP_SERVER_PROPAGATE_INBOUND_TRACE, false)
-		return nil
-	})
+	common.SetProp(common.PROP_SERVER_PROPAGATE_INBOUND_TRACE, false)      // disable trace propagation, we are now the gateway
+	common.SetProp(common.PROP_CONSUL_REGISTER_DEFAULT_HEALTHCHECK, false) // disable the default health check endpoint to avoid conflicts
+	common.SetProp(common.PROP_CONSUL_HEALTHCHECK_URL, "/health")          // for consul health check
 
-	server.RawAny("/proxy/*proxyPath", func(c *gin.Context, ec common.ExecContext) {
+	server.RawAny("/*proxyPath", func(c *gin.Context, ec common.ExecContext) {
 		ec.Log.Debugf("pre filter, method: %v, url: %v, headers: %v", c.Request.Method, c.Request.URL, c.Request.Header)
 
-		filters := GetFilters()
-		for i := range filters {
-			if err := filters[i](c, ec); err != nil {
-				ec.Log.Debugf("pre filter request rejected, err: %v", err)
-				server.DispatchErrJson(c, err)
-				return
-			}
+		// check if it's a healthcheck endpoint (for consul), we don't really return anything, so it's fine to expose it
+		if c.Request.URL.Path == "/health" {
+			c.AbortWithStatus(200)
+			return
 		}
 
 		// parse the relatvie url, extract serviceName, and the relative url for the backend server
 		sp, err := parseServicePath(c.Request.URL.Path)
-		ec.Log.Debugf("post filter, parsed servicePath: %+v, err: %v", sp, err)
+		ec.Log.Debugf("parsed servicePath: %+v, err: %v", sp, err)
 
 		if err != nil {
 			ec.Log.Warnf("Invalid request, %v", err)
 			c.AbortWithStatus(404)
 			return
+		}
+
+		proxyContext := ProxyContext{}
+		proxyContext[SERVICE_PATH] = sp
+
+		filters := GetFilters()
+		for i := range filters {
+			if ok, err := filters[i](c, ec, proxyContext); err != nil || !ok {
+				ec.Log.Debugf("request filtered, err: %v, ok: %v", err, ok)
+				if err != nil {
+					server.DispatchErrJson(c, err)
+					return
+				}
+				return
+			}
 		}
 
 		// route requests dynamically using service discovery
@@ -110,23 +130,17 @@ func prepareServer() {
 	})
 }
 
-type ServicePath struct {
-	ServiceName string
-	Path        string
-}
-
 func parseServicePath(url string) (ServicePath, error) {
-	// /proxy/...
-	striped := []rune(url)[7:]
+	rurl := []rune(url)[1:] // remove leading '/'
 
 	// root path, invalid request
-	if len(striped) < 1 {
+	if len(rurl) < 1 {
 		return ServicePath{}, errPathNotFound
 	}
 
 	start := 0
-	for i := range striped {
-		if striped[i] == '/' && i > 0 {
+	for i := range rurl {
+		if rurl[i] == '/' && i > 0 {
 			start = i
 			break
 		}
@@ -137,7 +151,7 @@ func parseServicePath(url string) (ServicePath, error) {
 	}
 
 	return ServicePath{
-		ServiceName: string(striped[0:start]),
-		Path:        string(striped[start:]),
+		ServiceName: string(rurl[0:start]),
+		Path:        string(rurl[start:]),
 	}, nil
 }
