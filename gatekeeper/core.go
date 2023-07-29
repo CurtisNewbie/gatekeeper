@@ -61,7 +61,7 @@ func prepareServer() {
 
 		filters := GetFilters()
 		for i := range filters {
-			if ok, err := filters[i](c, ec, proxyContext); err != nil || !ok {
+			if ok, err := filters[i](c, &ec, proxyContext); err != nil || !ok {
 				ec.Log.Debugf("request filtered, err: %v, ok: %v", err, ok)
 				if err != nil {
 					server.DispatchErrJson(c, err)
@@ -72,7 +72,7 @@ func prepareServer() {
 		}
 
 		// route requests dynamically using service discovery
-		cli := client.NewDynTClient(ec, sp.Path, sp.ServiceName).
+		cli := client.NewDynTClient(ec, sp.Path+"?"+c.Request.URL.RawQuery, sp.ServiceName).
 			EnableTracing()
 
 		// propagate all headers to client

@@ -1,6 +1,7 @@
 package gatekeeper
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sync"
@@ -12,7 +13,7 @@ import (
 
 // ------------------------------------------------------------
 
-type Filter = func(c *gin.Context, ec common.ExecContext, proxyContext ProxyContext) (bool, error)
+type Filter = func(c *gin.Context, ec *common.ExecContext, proxyContext ProxyContext) (bool, error)
 
 // ------------------------------------------------------------
 
@@ -40,41 +41,42 @@ func GetFilters() []Filter {
 func prepareFilters() {
 
 	// first filter extract authentication
-	AddFilter(func(c *gin.Context, ec common.ExecContext, proxyContext ProxyContext) (bool, error) {
+	AddFilter(func(c *gin.Context, ec *common.ExecContext, proxyContext ProxyContext) (bool, error) {
 		authorization := c.GetHeader("Authorization")
+		ec.Log.Debugf("Authorization: %v", authorization)
+
 		if authorization != "" {
 			tkn, err := jwt.DecodeToken(authorization)
-			if err != nil {
-				return false, common.NewWebErr("Invalid Authentication Token", err.Error())
-			}
+			ec.Log.Debugf("DecodeToken, tkn: %v, err: %v", tkn, err)
 
-			if !tkn.Valid {
-				return false, common.NewWebErr("Invalid Authentication Token")
-			}
+			// requests may or may not be authenticated, some requests are 'PUBLIC', we just try to extract the user info from it
+			if err == nil && tkn.Valid {
+				claims := tkn.Claims
+				var user common.User = common.User{}
 
-			claims := tkn.Claims
-			var user common.User = common.User{}
-
-			if v, ok := claims["id"]; ok {
-				user.UserId = fmt.Sprintf("%v", v)
+				if v, ok := claims["id"]; ok {
+					user.UserId = fmt.Sprintf("%v", v)
+				}
+				if v, ok := claims["username"]; ok {
+					user.Username = fmt.Sprintf("%v", v)
+				}
+				if v, ok := claims["userno"]; ok {
+					user.UserNo = fmt.Sprintf("%v", v)
+				}
+				if v, ok := claims["roleno"]; ok {
+					user.RoleNo = fmt.Sprintf("%v", v)
+				}
+				proxyContext[AUTH_INFO] = &user
+				ec.Log.Debugf("set user to proxyContext: %v", proxyContext)
 			}
-			if v, ok := claims["username"]; ok {
-				user.Username = fmt.Sprintf("%v", v)
-			}
-			if v, ok := claims["userno"]; ok {
-				user.UserNo = fmt.Sprintf("%v", v)
-			}
-			if v, ok := claims["roleno"]; ok {
-				user.RoleNo = fmt.Sprintf("%v", v)
-			}
-
-			proxyContext[AUTH_INFO] = &user
 		}
 		return true, nil
 	})
 
 	// second filter validate authorization
-	AddFilter(func(c *gin.Context, ec common.ExecContext, proxyContext ProxyContext) (bool, error) {
+	AddFilter(func(c *gin.Context, ec *common.ExecContext, proxyContext ProxyContext) (bool, error) {
+
+		ec.Log.Debugf("proxyContext: %v", proxyContext)
 
 		var u *common.User = nil
 		if v, ok := proxyContext[AUTH_INFO]; ok && v != nil {
@@ -103,6 +105,24 @@ func prepareFilters() {
 			return false, nil
 		}
 
+		return true, nil
+	})
+
+	// set user info to context for tracing
+	AddFilter(func(c *gin.Context, ec *common.ExecContext, proxyContext ProxyContext) (bool, error) {
+		var u *common.User = nil
+		if v, ok := proxyContext[AUTH_INFO]; ok && v != nil {
+			u = v.(*common.User)
+		}
+
+		if u == nil {
+			return true, nil
+		}
+
+		ec.Ctx = context.WithValue(ec.Ctx, "id", u.UserId)         //lint:ignore SA1029 have to do this
+		ec.Ctx = context.WithValue(ec.Ctx, "username", u.Username) //lint:ignore SA1029 have to do this
+		ec.Ctx = context.WithValue(ec.Ctx, "userno", u.UserNo)     //lint:ignore SA1029 have to do this
+		ec.Ctx = context.WithValue(ec.Ctx, "roleno", u.RoleNo)     //lint:ignore SA1029 have to do this
 		return true, nil
 	})
 

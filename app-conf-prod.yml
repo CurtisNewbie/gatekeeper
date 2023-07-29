@@ -23,3 +23,9 @@ tracing.propagation.keys:
   - roleno
 
 logging.rolling.file: "/usr/src/logs/${app.name}.log"
+
+jwt:
+  key:
+    public: ${jwt-module.publicKey}
+    private: ${jwt-module.privateKey}
+    issuer: "yongj.zhuang-auth-service"
