@@ -21,3 +21,6 @@ tracing.propagation.keys:
   - username
   - role
   - roleno
+
+logging:
+  level: debug
