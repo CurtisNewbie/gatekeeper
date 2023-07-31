@@ -52,7 +52,7 @@ func prepareFilters() {
 			// requests may or may not be authenticated, some requests are 'PUBLIC', we just try to extract the user info from it
 			if err == nil && tkn.Valid {
 				claims := tkn.Claims
-				var user common.User = common.User{}
+				var user common.User
 
 				if v, ok := claims["id"]; ok {
 					user.UserId = fmt.Sprintf("%v", v)
@@ -82,12 +82,12 @@ func prepareFilters() {
 		if v, ok := proxyContext[AUTH_INFO]; ok && v != nil {
 			u = v.(*common.User)
 		}
-		var roleNo string = ""
+		var roleNo string 
 		if u != nil {
 			roleNo = u.RoleNo
 		}
 
-		r, err := TestResourceAccess(ec.Ctx, TestResAccessReq{
+		r, err := TestResourceAccess(*ec, TestResAccessReq{
 			Url:    c.Request.URL.Path,
 			Method: c.Request.Method,
 			RoleNo: roleNo,
@@ -109,7 +109,7 @@ func prepareFilters() {
 	})
 
 	// set user info to context for tracing
-	AddFilter(func(c *gin.Context, ec *common.ExecContext, proxyContext ProxyContext) (bool, error) {
+	AddFilter(func(_ *gin.Context, ec *common.ExecContext, proxyContext ProxyContext) (bool, error) {
 		var u *common.User = nil
 		if v, ok := proxyContext[AUTH_INFO]; ok && v != nil {
 			u = v.(*common.User)
@@ -125,5 +125,4 @@ func prepareFilters() {
 		ec.Ctx = context.WithValue(ec.Ctx, "roleno", u.RoleNo)     //lint:ignore SA1029 have to do this
 		return true, nil
 	})
-
 }

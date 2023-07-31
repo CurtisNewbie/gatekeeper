@@ -24,7 +24,6 @@ var (
 
 // -----------------------------------------------------------
 
-// Bootstrap Gatekeeper
 func Bootstrap(args []string) {
 	prepareFilters()
 	prepareServer()
@@ -46,7 +45,7 @@ func prepareServer() {
 			return
 		}
 
-		// parse the relatvie url, extract serviceName, and the relative url for the backend server
+		// parse the request path, extract service name, and the relative url for the backend server
 		sp, err := parseServicePath(c.Request.URL.Path)
 		ec.Log.Debugf("parsed servicePath: %+v, err: %v", sp, err)
 
@@ -67,7 +66,7 @@ func prepareServer() {
 					server.DispatchErrJson(c, err)
 					return
 				}
-				return
+				return // not ok, the filter should write the response itself, e.g., returning a 403 status code
 			}
 		}
 

@@ -1,8 +1,6 @@
 package gatekeeper
 
 import (
-	"context"
-
 	"github.com/curtisnewbie/gocommon/client"
 	"github.com/curtisnewbie/gocommon/common"
 )
@@ -18,8 +16,7 @@ type TestResAccessResp struct {
 }
 
 // Test whether this role has access to the url
-func TestResourceAccess(ctx context.Context, req TestResAccessReq) (TestResAccessResp, error) {
-	c := common.EmptyExecContext()
+func TestResourceAccess(c common.ExecContext, req TestResAccessReq) (TestResAccessResp, error) {
 	tr := client.NewDynTClient(c, "/remote/path/resource/access-test", "goauth").
 		EnableTracing().
 		PostJson(req)

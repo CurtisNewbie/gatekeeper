@@ -19,7 +19,6 @@ tracing.propagation.keys:
   - id
   - userno
   - username
-  - role
   - roleno
 
 logging.rolling.file: "/usr/src/logs/${app.name}.log"
