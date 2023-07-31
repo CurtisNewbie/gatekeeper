@@ -5,7 +5,7 @@ app.name: "gatekeeper"
 server:
   port: 7070
   gracefulShutdownTimeSec: 5
-  perf.enabled: false
+  perf.enabled: true
 
 consul:
   enabled: true
@@ -21,7 +21,10 @@ tracing.propagation.keys:
   - username
   - roleno
 
-logging.rolling.file: "/usr/src/logs/${app.name}.log"
+logging:
+  rolling:
+    file: "/usr/src/logs/${app.name}.log"
+  level: "info"
 
 jwt:
   key:

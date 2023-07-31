@@ -3,7 +3,7 @@ module github.com/curtisnewbie/gatekeeper
 go 1.18
 
 require (
-	github.com/curtisnewbie/gocommon v0.0.0-20230729095642-750b96f1b819
+	github.com/curtisnewbie/gocommon v1.0.13-0.20230731140901-61307eac4c6d
 	github.com/gin-gonic/gin v1.8.1
 )
 

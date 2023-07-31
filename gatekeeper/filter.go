@@ -82,7 +82,7 @@ func prepareFilters() {
 		if v, ok := proxyContext[AUTH_INFO]; ok && v != nil {
 			u = v.(*common.User)
 		}
-		var roleNo string 
+		var roleNo string
 		if u != nil {
 			roleNo = u.RoleNo
 		}
@@ -101,7 +101,12 @@ func prepareFilters() {
 
 		if !r.Valid {
 			ec.Log.Warn("Request forbidden, valid = false")
-			c.AbortWithStatus(http.StatusForbidden)
+			if u == nil { // the endpoint is not publicly accessible, the request is not authenticated
+				c.AbortWithStatus(http.StatusUnauthorized)
+				return false, nil
+			}
+
+			c.AbortWithStatus(http.StatusForbidden) // request authenticated, but doesn't have enouth authority to access the endpoint
 			return false, nil
 		}
 

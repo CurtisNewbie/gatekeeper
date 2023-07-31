@@ -37,7 +37,7 @@ func prepareServer() {
 	common.SetProp(common.PROP_CONSUL_HEALTHCHECK_URL, "/health")          // for consul health check
 
 	server.RawAny("/*proxyPath", func(c *gin.Context, ec common.ExecContext) {
-		ec.Log.Debugf("pre filter, method: %v, url: %v, headers: %v", c.Request.Method, c.Request.URL, c.Request.Header)
+		ec.Log.Debugf("Request: %v %v, headers: %v", c.Request.Method, c.Request.URL.Path, c.Request.Header)
 
 		// check if it's a healthcheck endpoint (for consul), we don't really return anything, so it's fine to expose it
 		if c.Request.URL.Path == "/health" {
