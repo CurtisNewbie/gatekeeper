@@ -57,7 +57,7 @@ func prepareFilters() {
 
 				if v, ok := claims["id"]; ok {
 					n, err := strconv.Atoi(fmt.Sprintf("%v", v))
-					if err != nil {
+					if err == nil {
 						user.UserId = n
 					}
 				}
