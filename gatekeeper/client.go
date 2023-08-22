@@ -16,7 +16,7 @@ type TestResAccessResp struct {
 }
 
 // Test whether this role has access to the url
-func TestResourceAccess(c common.ExecContext, req TestResAccessReq) (TestResAccessResp, error) {
+func TestResourceAccess(c common.Rail, req TestResAccessReq) (TestResAccessResp, error) {
 	tr := client.NewDynTClient(c, "/remote/path/resource/access-test", "goauth").
 		EnableTracing().
 		PostJson(req)

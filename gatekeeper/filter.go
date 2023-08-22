@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
 
 	"github.com/curtisnewbie/gocommon/common"
@@ -13,7 +14,7 @@ import (
 
 // ------------------------------------------------------------
 
-type Filter = func(c *gin.Context, ec *common.ExecContext, proxyContext ProxyContext) (bool, error)
+type Filter = func(c *gin.Context, ec *common.Rail, proxyContext ProxyContext) (bool, error)
 
 // ------------------------------------------------------------
 
@@ -41,13 +42,13 @@ func GetFilters() []Filter {
 func prepareFilters() {
 
 	// first filter extract authentication
-	AddFilter(func(c *gin.Context, ec *common.ExecContext, proxyContext ProxyContext) (bool, error) {
+	AddFilter(func(c *gin.Context, ec *common.Rail, proxyContext ProxyContext) (bool, error) {
 		authorization := c.GetHeader("Authorization")
-		ec.Log.Debugf("Authorization: %v", authorization)
+		ec.Debugf("Authorization: %v", authorization)
 
 		if authorization != "" {
 			tkn, err := jwt.DecodeToken(authorization)
-			ec.Log.Debugf("DecodeToken, tkn: %v, err: %v", tkn, err)
+			ec.Debugf("DecodeToken, tkn: %v, err: %v", tkn, err)
 
 			// requests may or may not be authenticated, some requests are 'PUBLIC', we just try to extract the user info from it
 			if err == nil && tkn.Valid {
@@ -55,7 +56,10 @@ func prepareFilters() {
 				var user common.User
 
 				if v, ok := claims["id"]; ok {
-					user.UserId = fmt.Sprintf("%v", v)
+					n, err := strconv.Atoi(fmt.Sprintf("%v", v))
+					if err != nil {
+						user.UserId = n
+					}
 				}
 				if v, ok := claims["username"]; ok {
 					user.Username = fmt.Sprintf("%v", v)
@@ -67,16 +71,16 @@ func prepareFilters() {
 					user.RoleNo = fmt.Sprintf("%v", v)
 				}
 				proxyContext[AUTH_INFO] = &user
-				ec.Log.Debugf("set user to proxyContext: %v", proxyContext)
+				ec.Debugf("set user to proxyContext: %v", proxyContext)
 			}
 		}
 		return true, nil
 	})
 
 	// second filter validate authorization
-	AddFilter(func(c *gin.Context, ec *common.ExecContext, proxyContext ProxyContext) (bool, error) {
+	AddFilter(func(c *gin.Context, ec *common.Rail, proxyContext ProxyContext) (bool, error) {
 
-		ec.Log.Debugf("proxyContext: %v", proxyContext)
+		ec.Debugf("proxyContext: %v", proxyContext)
 
 		var u *common.User = nil
 		if v, ok := proxyContext[AUTH_INFO]; ok && v != nil {
@@ -95,12 +99,12 @@ func prepareFilters() {
 
 		if err != nil {
 			c.AbortWithStatus(http.StatusForbidden)
-			ec.Log.Warnf("Request forbidden, err: %v", err)
+			ec.Warnf("Request forbidden, err: %v", err)
 			return false, nil
 		}
 
 		if !r.Valid {
-			ec.Log.Warn("Request forbidden, valid = false")
+			ec.Warn("Request forbidden, valid = false")
 			if u == nil { // the endpoint is not publicly accessible, the request is not authenticated
 				c.AbortWithStatus(http.StatusUnauthorized)
 				return false, nil
@@ -114,7 +118,7 @@ func prepareFilters() {
 	})
 
 	// set user info to context for tracing
-	AddFilter(func(_ *gin.Context, ec *common.ExecContext, proxyContext ProxyContext) (bool, error) {
+	AddFilter(func(_ *gin.Context, ec *common.Rail, proxyContext ProxyContext) (bool, error) {
 		var u *common.User = nil
 		if v, ok := proxyContext[AUTH_INFO]; ok && v != nil {
 			u = v.(*common.User)
