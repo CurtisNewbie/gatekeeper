@@ -11,9 +11,6 @@ consul:
   enabled: true
   consulAddress: consul:8500
   healthCheckUrl: /health
-  healthCheckInterval: 120s
-  healthCheckTimeout: 120s
-  healthCheckFailedDeregisterAfter: 5s
 
 tracing.propagation.keys:
   - id
