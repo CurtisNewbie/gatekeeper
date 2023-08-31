@@ -8,13 +8,14 @@ import (
 	"sync"
 
 	"github.com/curtisnewbie/gocommon/common"
-	"github.com/curtisnewbie/gocommon/jwt"
+	"github.com/curtisnewbie/miso/core"
+	"github.com/curtisnewbie/miso/jwt"
 	"github.com/gin-gonic/gin"
 )
 
 // ------------------------------------------------------------
 
-type Filter = func(c *gin.Context, ec *common.Rail, proxyContext ProxyContext) (bool, error)
+type Filter = func(c *gin.Context, ec *core.Rail, proxyContext ProxyContext) (bool, error)
 
 // ------------------------------------------------------------
 
@@ -42,7 +43,7 @@ func GetFilters() []Filter {
 func prepareFilters() {
 
 	// first filter extract authentication
-	AddFilter(func(c *gin.Context, ec *common.Rail, proxyContext ProxyContext) (bool, error) {
+	AddFilter(func(c *gin.Context, ec *core.Rail, proxyContext ProxyContext) (bool, error) {
 		authorization := c.GetHeader("Authorization")
 		ec.Debugf("Authorization: %v", authorization)
 
@@ -78,7 +79,7 @@ func prepareFilters() {
 	})
 
 	// second filter validate authorization
-	AddFilter(func(c *gin.Context, ec *common.Rail, proxyContext ProxyContext) (bool, error) {
+	AddFilter(func(c *gin.Context, ec *core.Rail, proxyContext ProxyContext) (bool, error) {
 
 		ec.Debugf("proxyContext: %v", proxyContext)
 
@@ -118,7 +119,7 @@ func prepareFilters() {
 	})
 
 	// set user info to context for tracing
-	AddFilter(func(_ *gin.Context, ec *common.Rail, proxyContext ProxyContext) (bool, error) {
+	AddFilter(func(_ *gin.Context, ec *core.Rail, proxyContext ProxyContext) (bool, error) {
 		var u *common.User = nil
 		if v, ok := proxyContext[AUTH_INFO]; ok && v != nil {
 			u = v.(*common.User)

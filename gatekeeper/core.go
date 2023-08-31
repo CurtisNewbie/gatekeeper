@@ -4,10 +4,10 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/curtisnewbie/gocommon/client"
-	"github.com/curtisnewbie/gocommon/common"
-	"github.com/curtisnewbie/gocommon/consul"
-	"github.com/curtisnewbie/gocommon/server"
+	"github.com/curtisnewbie/miso/client"
+	"github.com/curtisnewbie/miso/consul"
+	"github.com/curtisnewbie/miso/core"
+	"github.com/curtisnewbie/miso/server"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,7 +19,7 @@ type ServicePath struct {
 // -----------------------------------------------------------
 
 var (
-	errPathNotFound = common.NewWebErr("Path not found")
+	errPathNotFound = core.NewWebErr("Path not found")
 )
 
 // -----------------------------------------------------------
@@ -32,12 +32,12 @@ func Bootstrap(args []string) {
 
 func prepareServer() {
 
-	common.SetProp(common.PROP_METRICS_ENABLED, false)                     // disable prometheus
-	common.SetProp(common.PROP_SERVER_PROPAGATE_INBOUND_TRACE, false)      // disable trace propagation, we are the entry point
-	common.SetProp(common.PROP_CONSUL_REGISTER_DEFAULT_HEALTHCHECK, false) // disable the default health check endpoint to avoid conflicts
-	common.SetProp(common.PROP_CONSUL_HEALTHCHECK_URL, "/health")          // for consul health check
+	core.SetProp(core.PROP_METRICS_ENABLED, false)                     // disable prometheus
+	core.SetProp(core.PROP_SERVER_PROPAGATE_INBOUND_TRACE, false)      // disable trace propagation, we are the entry point
+	core.SetProp(core.PROP_CONSUL_REGISTER_DEFAULT_HEALTHCHECK, false) // disable the default health check endpoint to avoid conflicts
+	core.SetProp(core.PROP_CONSUL_HEALTHCHECK_URL, "/health")          // for consul health check
 
-	server.RawAny("/*proxyPath", func(c *gin.Context, rail common.Rail) {
+	server.RawAny("/*proxyPath", func(c *gin.Context, rail core.Rail) {
 		rail.Debugf("Request: %v %v, headers: %v", c.Request.Method, c.Request.URL.Path, c.Request.Header)
 
 		// check if it's a healthcheck endpoint (for consul), we don't really return anything, so it's fine to expose it
