@@ -1,0 +1,17 @@
+
+FROM alpine:3.17
+
+LABEL author="Yongjie Zhuang"
+LABEL descrption="Mini-Fstore that store files :D"
+
+RUN apk --no-cache add tzdata
+
+WORKDIR /usr/src/
+
+# binary is pre-compiled
+COPY gatekeeper_build ./main
+
+ENV TZ=Asia/Shanghai
+
+CMD ["./main", "configFile=/usr/src/config/app-conf-prod.yml"]
+
