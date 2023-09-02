@@ -82,6 +82,10 @@ func prepareServer() {
 		// continue propgating the trace
 		rail = pc.Rail
 
+		// set trace back to Gin for the PerfMiddleware, this feels like a hack, but we have to do this
+		c.Set(core.X_TRACEID, rail.CtxValStr(core.X_TRACEID))
+		c.Set(core.X_SPANID, rail.CtxValStr(core.X_SPANID))
+
 		// route requests dynamically using service discovery
 		relPath := sp.Path
 		if c.Request.URL.RawQuery != "" {
