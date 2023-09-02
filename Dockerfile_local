@@ -2,7 +2,7 @@
 FROM alpine:3.17
 
 LABEL author="Yongjie Zhuang"
-LABEL descrption="Mini-Fstore that store files :D"
+LABEL descrption="Gatekeeper - Simple gateway written in Go"
 
 RUN apk --no-cache add tzdata
 

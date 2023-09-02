@@ -1,6 +1,6 @@
 FROM golang:1.18-alpine as build
 LABEL author="Yongjie Zhuang"
-LABEL descrption="Mini-Fstore that store files :D"
+LABEL descrption="Gatekeeper - Simple gateway written in Go"
 
 RUN apk --no-cache add tzdata
 WORKDIR /go/src/build/
