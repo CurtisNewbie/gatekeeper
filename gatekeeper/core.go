@@ -56,23 +56,33 @@ func prepareServer() {
 			return
 		}
 
-		proxyContext := ProxyContext{}
-		proxyContext[SERVICE_PATH] = sp
+		pc := NewProxyContext(rail, c)
+		pc.SetAttr(SERVICE_PATH, sp)
 
 		filters := GetFilters()
 		for i := range filters {
-			if ok, err := filters[i](c, &rail, proxyContext); err != nil || !ok {
-				rail.Debugf("request filtered, err: %v, ok: %v", err, ok)
+			fr, err := filters[i](pc)
+			if err != nil || !fr.Next {
+				rail.Debugf("request filtered, err: %v, ok: %v", err, fr)
 				if err != nil {
 					server.DispatchErrJson(c, rail, err)
 					return
 				}
-				return // not ok, the filter should write the response itself, e.g., returning a 403 status code
+
+				return // discontinue, the filter should write the response itself, e.g., returning a 403 status code
 			}
+			pc = fr.ProxyContext // replace the ProxyContext, trace may be set
 		}
 
+		// continue propgating the trace
+		rail = pc.Rail
+
 		// route requests dynamically using service discovery
-		cli := client.NewDynTClient(rail, sp.Path+"?"+c.Request.URL.RawQuery, sp.ServiceName).
+		relPath := sp.Path
+		if c.Request.URL.RawQuery != "" {
+			relPath += "?" + c.Request.URL.RawQuery
+		}
+		cli := client.NewDynTClient(rail, relPath, sp.ServiceName).
 			EnableTracing()
 
 		// propagate all headers to client
