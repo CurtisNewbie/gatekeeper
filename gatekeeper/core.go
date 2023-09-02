@@ -22,6 +22,10 @@ var (
 	errPathNotFound = core.NewWebErr("Path not found")
 )
 
+const (
+	healthCheckPath = "/health"
+)
+
 // -----------------------------------------------------------
 
 func Bootstrap(args []string) {
@@ -35,13 +39,14 @@ func prepareServer() {
 	core.SetProp(core.PROP_METRICS_ENABLED, false)                     // disable prometheus
 	core.SetProp(core.PROP_SERVER_PROPAGATE_INBOUND_TRACE, false)      // disable trace propagation, we are the entry point
 	core.SetProp(core.PROP_CONSUL_REGISTER_DEFAULT_HEALTHCHECK, false) // disable the default health check endpoint to avoid conflicts
-	core.SetProp(core.PROP_CONSUL_HEALTHCHECK_URL, "/health")          // for consul health check
+	core.SetProp(core.PROP_CONSUL_HEALTHCHECK_URL, healthCheckPath)    // for consul health check
+	server.PerfLogExclPath(healthCheckPath)                            // do not measure perf for healthcheck
 
 	server.RawAny("/*proxyPath", func(c *gin.Context, rail core.Rail) {
 		rail.Debugf("Request: %v %v, headers: %v", c.Request.Method, c.Request.URL.Path, c.Request.Header)
 
 		// check if it's a healthcheck endpoint (for consul), we don't really return anything, so it's fine to expose it
-		if c.Request.URL.Path == "/health" {
+		if c.Request.URL.Path == healthCheckPath {
 			c.AbortWithStatus(200)
 			return
 		}
