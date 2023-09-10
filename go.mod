@@ -3,8 +3,8 @@ module github.com/curtisnewbie/gatekeeper
 go 1.18
 
 require (
-	github.com/curtisnewbie/gocommon v1.1.1-0.20230829064553-43a2d3d28ce0
-	github.com/curtisnewbie/miso v0.0.0-20230902053153-5f18c431a74f
+	github.com/curtisnewbie/gocommon v0.0.0-20230910134347-36827a24f7f4
+	github.com/curtisnewbie/miso v0.0.0-20230910133621-2fcfc3a2311f
 	github.com/gin-gonic/gin v1.8.1
 )
 
@@ -41,6 +41,7 @@ require (
 	github.com/magiconair/properties v1.8.6 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
+	github.com/mattn/go-sqlite3 v1.14.9 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
@@ -73,5 +74,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gorm.io/driver/mysql v1.3.6 // indirect
+	gorm.io/driver/sqlite v1.2.6 // indirect
 	gorm.io/gorm v1.23.8 // indirect
 )

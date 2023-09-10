@@ -1,7 +1,7 @@
 package gatekeeper
 
 import (
-	"github.com/curtisnewbie/miso/core"
+	"github.com/curtisnewbie/miso/miso"
 	"github.com/gin-gonic/gin"
 )
 
@@ -11,7 +11,7 @@ const (
 )
 
 type ProxyContext struct {
-	Rail core.Rail
+	Rail miso.Rail
 	Gin  *gin.Context
 
 	attr map[string]any // attributes, it's lazy, only initialized on write
@@ -34,7 +34,7 @@ func (pc *ProxyContext) GetAttr(key string) (any, bool) {
 	return v, ok
 }
 
-func NewProxyContext(rail core.Rail, c *gin.Context) ProxyContext {
+func NewProxyContext(rail miso.Rail, c *gin.Context) ProxyContext {
 	return ProxyContext{
 		attr: nil,
 		Gin:  c,

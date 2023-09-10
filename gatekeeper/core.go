@@ -4,10 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/curtisnewbie/miso/client"
-	"github.com/curtisnewbie/miso/consul"
-	"github.com/curtisnewbie/miso/core"
-	"github.com/curtisnewbie/miso/server"
+	"github.com/curtisnewbie/miso/miso"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,7 +16,7 @@ type ServicePath struct {
 // -----------------------------------------------------------
 
 var (
-	errPathNotFound = core.NewWebErr("Path not found")
+	errPathNotFound = miso.NewWebErr("Path not found")
 )
 
 const (
@@ -31,18 +28,18 @@ const (
 func Bootstrap(args []string) {
 	prepareFilters()
 	prepareServer()
-	server.BootstrapServer(args)
+	miso.BootstrapServer(args)
 }
 
 func prepareServer() {
 
-	core.SetProp(core.PROP_METRICS_ENABLED, false)                     // disable prometheus
-	core.SetProp(core.PROP_SERVER_PROPAGATE_INBOUND_TRACE, false)      // disable trace propagation, we are the entry point
-	core.SetProp(core.PROP_CONSUL_REGISTER_DEFAULT_HEALTHCHECK, false) // disable the default health check endpoint to avoid conflicts
-	core.SetProp(core.PROP_CONSUL_HEALTHCHECK_URL, healthCheckPath)    // for consul health check
-	server.PerfLogExclPath(healthCheckPath)                            // do not measure perf for healthcheck
+	miso.SetProp(miso.PROP_METRICS_ENABLED, false)                     // disable prometheus
+	miso.SetProp(miso.PROP_SERVER_PROPAGATE_INBOUND_TRACE, false)      // disable trace propagation, we are the entry point
+	miso.SetProp(miso.PROP_CONSUL_REGISTER_DEFAULT_HEALTHCHECK, false) // disable the default health check endpoint to avoid conflicts
+	miso.SetProp(miso.PROP_CONSUL_HEALTHCHECK_URL, healthCheckPath)    // for consul health check
+	miso.PerfLogExclPath(healthCheckPath)                            // do not measure perf for healthcheck
 
-	server.RawAny("/*proxyPath", func(c *gin.Context, rail core.Rail) {
+	miso.RawAny("/*proxyPath", func(c *gin.Context, rail miso.Rail) {
 		rail.Debugf("Request: %v %v, headers: %v", c.Request.Method, c.Request.URL.Path, c.Request.Header)
 
 		// check if it's a healthcheck endpoint (for consul), we don't really return anything, so it's fine to expose it
@@ -70,7 +67,7 @@ func prepareServer() {
 			if err != nil || !fr.Next {
 				rail.Debugf("request filtered, err: %v, ok: %v", err, fr)
 				if err != nil {
-					server.DispatchErrJson(c, rail, err)
+					miso.DispatchErrJson(c, rail, err)
 					return
 				}
 
@@ -83,15 +80,15 @@ func prepareServer() {
 		rail = pc.Rail
 
 		// set trace back to Gin for the PerfMiddleware, this feels like a hack, but we have to do this
-		c.Set(core.X_TRACEID, rail.CtxValStr(core.X_TRACEID))
-		c.Set(core.X_SPANID, rail.CtxValStr(core.X_SPANID))
+		c.Set(miso.X_TRACEID, rail.CtxValStr(miso.X_TRACEID))
+		c.Set(miso.X_SPANID, rail.CtxValStr(miso.X_SPANID))
 
 		// route requests dynamically using service discovery
 		relPath := sp.Path
 		if c.Request.URL.RawQuery != "" {
 			relPath += "?" + c.Request.URL.RawQuery
 		}
-		cli := client.NewDynTClient(rail, relPath, sp.ServiceName).
+		cli := miso.NewDynTClient(rail, relPath, sp.ServiceName).
 			EnableTracing()
 
 		// propagate all headers to client
@@ -101,7 +98,7 @@ func prepareServer() {
 			}
 		}
 
-		var r *client.TResponse
+		var r *miso.TResponse
 		switch c.Request.Method {
 		case http.MethodGet:
 			r = cli.Get()
@@ -122,12 +119,12 @@ func prepareServer() {
 
 		if r.Err != nil {
 			rail.Debugf("post proxy request, request failed, err: %v", r.Err)
-			if errors.Is(r.Err, consul.ErrServiceInstanceNotFound) {
+			if errors.Is(r.Err, miso.ErrConsulServiceInstanceNotFound) {
 				c.AbortWithStatus(404)
 				return
 			}
 
-			server.DispatchErrJson(c, rail, r.Err)
+			miso.DispatchErrJson(c, rail, r.Err)
 			return
 		}
 		defer r.Close()

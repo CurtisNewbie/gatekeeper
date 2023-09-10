@@ -1,9 +1,6 @@
 package gatekeeper
 
-import (
-	"github.com/curtisnewbie/miso/client"
-	"github.com/curtisnewbie/miso/core"
-)
+import "github.com/curtisnewbie/miso/miso"
 
 type TestResAccessReq struct {
 	RoleNo string `json:"roleNo"`
@@ -16,8 +13,8 @@ type TestResAccessResp struct {
 }
 
 // Test whether this role has access to the url
-func TestResourceAccess(c core.Rail, req TestResAccessReq) (TestResAccessResp, error) {
-	tr := client.NewDynTClient(c, "/remote/path/resource/access-test", "goauth").
+func TestResourceAccess(c miso.Rail, req TestResAccessReq) (TestResAccessResp, error) {
+	tr := miso.NewDynTClient(c, "/remote/path/resource/access-test", "goauth").
 		EnableTracing().
 		PostJson(req)
 
@@ -25,7 +22,7 @@ func TestResourceAccess(c core.Rail, req TestResAccessReq) (TestResAccessResp, e
 		return TestResAccessResp{}, tr.Err
 	}
 
-	var r core.GnResp[TestResAccessResp]
+	var r miso.GnResp[TestResAccessResp]
 	if e := tr.ReadJson(&r); e != nil {
 		return TestResAccessResp{}, e
 	}

@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/curtisnewbie/gocommon/common"
-	"github.com/curtisnewbie/miso/jwt"
+	"github.com/curtisnewbie/miso/miso"
 )
 
 // ------------------------------------------------------------
@@ -62,7 +62,7 @@ func prepareFilters() {
 		}
 
 		// decode jwt token, extract claims and build a user struct as attr
-		tkn, err := jwt.DecodeToken(authorization)
+		tkn, err := miso.JwtDecode(authorization)
 		rail.Debugf("DecodeToken, tkn: %v, err: %v", tkn, err)
 
 		// token invalid, but the public endpoints are still accessible, so we don't stop here
