@@ -71,8 +71,8 @@ github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGX
 github.com/cncf/udpa/go v0.0.0-20200629203442-efcf912fb354/go.mod h1:WmhPx2Nbnhtbo57+VJT5O0JRkEi1Wbu0z5j0R8u5Hbk=
 github.com/cncf/udpa/go v0.0.0-20201120205902-5459f2c99403/go.mod h1:WmhPx2Nbnhtbo57+VJT5O0JRkEi1Wbu0z5j0R8u5Hbk=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
-github.com/curtisnewbie/gocommon v0.0.0-20230910134347-36827a24f7f4 h1:JxPPr5jIyeBO6bvfFEeTWmQROPIuyH1jIMVmroAvM3c=
-github.com/curtisnewbie/gocommon v0.0.0-20230910134347-36827a24f7f4/go.mod h1:yps82ZaGOyTD1VAhcbiOsBb02b4J+zVRqY4+2E+wRsw=
+github.com/curtisnewbie/gocommon v1.1.1-0.20230910134347-36827a24f7f4 h1:sLJUGSzRl4/wGaaCs4rTBaRjghNTtmK/mq2Z3nz3P/Y=
+github.com/curtisnewbie/gocommon v1.1.1-0.20230910134347-36827a24f7f4/go.mod h1:yps82ZaGOyTD1VAhcbiOsBb02b4J+zVRqY4+2E+wRsw=
 github.com/curtisnewbie/miso v0.0.0-20230910133621-2fcfc3a2311f h1:kVD2VJuRNjjMgvbMhN/uywYBml1sAq7Srl2kiVAzmds=
 github.com/curtisnewbie/miso v0.0.0-20230910133621-2fcfc3a2311f/go.mod h1:6/26v4YiC2OVHugrRmMCFRpoLfpufpSXOQoE4aWepzg=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
