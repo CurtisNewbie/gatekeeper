@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/curtisnewbie/gocommon/common"
 	"github.com/curtisnewbie/miso/miso"
 	"github.com/gin-gonic/gin"
 )
@@ -32,6 +33,7 @@ func Bootstrap(args []string) {
 }
 
 func prepareServer() {
+	common.LoadBuiltinPropagationKeys()
 
 	miso.SetProp(miso.PROP_METRICS_ENABLED, false)                     // disable prometheus
 	miso.SetProp(miso.PROP_SERVER_PROPAGATE_INBOUND_TRACE, false)      // disable trace propagation, we are the entry point
