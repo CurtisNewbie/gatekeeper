@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/curtisnewbie/gocommon v1.1.1-0.20230910134347-36827a24f7f4
-	github.com/curtisnewbie/miso v0.0.0-20230910133621-2fcfc3a2311f
+	github.com/curtisnewbie/miso v0.0.0-20230913171858-a30ccf168617
 	github.com/gin-gonic/gin v1.8.1
 )
 
