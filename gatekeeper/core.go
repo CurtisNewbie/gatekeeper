@@ -35,11 +35,11 @@ func Bootstrap(args []string) {
 func prepareServer() {
 	common.LoadBuiltinPropagationKeys()
 
-	miso.SetProp(miso.PROP_METRICS_ENABLED, false)                     // disable prometheus
-	miso.SetProp(miso.PROP_SERVER_PROPAGATE_INBOUND_TRACE, false)      // disable trace propagation, we are the entry point
-	miso.SetProp(miso.PROP_CONSUL_REGISTER_DEFAULT_HEALTHCHECK, false) // disable the default health check endpoint to avoid conflicts
-	miso.SetProp(miso.PROP_CONSUL_HEALTHCHECK_URL, healthCheckPath)    // for consul health check
-	miso.PerfLogExclPath(healthCheckPath)                            // do not measure perf for healthcheck
+	miso.SetProp(miso.PropMetricsEnabled, false)                   // disable prometheus
+	miso.SetProp(miso.PropServerPropagateInboundTrace, false)      // disable trace propagation, we are the entry point
+	miso.SetProp(miso.PropConsulRegisterDefaultHealthcheck, false) // disable the default health check endpoint to avoid conflicts
+	miso.SetProp(miso.PropConsulHealthcheckUrl, healthCheckPath)   // for consul health check
+	miso.PerfLogExclPath(healthCheckPath)                          // do not measure perf for healthcheck
 
 	miso.RawAny("/*proxyPath", func(c *gin.Context, rail miso.Rail) {
 		rail.Debugf("Request: %v %v, headers: %v", c.Request.Method, c.Request.URL.Path, c.Request.Header)
