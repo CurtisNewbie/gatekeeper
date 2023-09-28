@@ -3,28 +3,35 @@ package gatekeeper
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/curtisnewbie/gocommon/common"
 	"github.com/curtisnewbie/miso/miso"
 	"github.com/gin-gonic/gin"
 )
 
-type ServicePath struct {
-	ServiceName string
-	Path        string
-}
-
-// -----------------------------------------------------------
-
-var (
-	errPathNotFound = miso.NewWebErr("Path not found")
-)
-
 const (
 	healthCheckPath = "/health"
 )
 
-// -----------------------------------------------------------
+var (
+	errPathNotFound = miso.NewWebErr("Path not found")
+	gatewayClient   *http.Client
+)
+
+func init() {
+	gatewayClient = &http.Client{Timeout: 10 * time.Second}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 1500
+	transport.MaxIdleConnsPerHost = 1000
+	transport.IdleConnTimeout = time.Minute * 10 // make sure that we can maximize the re-use of connnections
+	gatewayClient.Transport = transport
+}
+
+type ServicePath struct {
+	ServiceName string
+	Path        string
+}
 
 func Bootstrap(args []string) {
 	prepareFilters()
@@ -90,7 +97,8 @@ func prepareServer() {
 		if c.Request.URL.RawQuery != "" {
 			relPath += "?" + c.Request.URL.RawQuery
 		}
-		cli := miso.NewDynTClient(rail, relPath, sp.ServiceName).
+		cli := miso.NewTClient(rail, relPath, gatewayClient).
+			EnableServiceDiscovery(sp.ServiceName).
 			EnableTracing()
 
 		// propagate all headers to client
