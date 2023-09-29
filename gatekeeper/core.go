@@ -15,7 +15,7 @@ const (
 )
 
 var (
-	errPathNotFound = miso.NewWebErr("Path not found")
+	errPathNotFound = miso.NewErr("Path not found")
 	gatewayClient   *http.Client
 )
 
