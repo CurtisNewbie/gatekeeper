@@ -20,7 +20,7 @@ var (
 )
 
 func init() {
-	gatewayClient = &http.Client{Timeout: 10 * time.Second}
+	gatewayClient = &http.Client{Timeout: 0}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.MaxIdleConns = 1500
 	transport.MaxIdleConnsPerHost = 1000
