@@ -104,12 +104,10 @@ func prepareFilters() {
 		rail.Debugf("proxyContext: %v", pc)
 
 		var roleNo string
-		var u common.User
-		var hasUser bool = false
+		var u common.User = common.NilUser()
 
 		if v, ok := pc.GetAttr(AUTH_INFO); ok && v != nil {
 			u = v.(common.User)
-			hasUser = true
 			roleNo = u.RoleNo
 		}
 
@@ -126,8 +124,8 @@ func prepareFilters() {
 		}
 
 		if !r.Valid {
-			rail.Warn("Request forbidden, valid = false")
-			if !hasUser { // the endpoint is not publicly accessible, the request is not authenticated
+			rail.Warnf("Request forbidden (resource access not authorized), url: %v, user: %+v", c.Request.URL.Path, u)
+			if !u.IsNil { // the endpoint is not publicly accessible, the request is not authenticated
 				c.AbortWithStatus(http.StatusUnauthorized)
 				return NewFilterResult(pc, false), nil
 			}
