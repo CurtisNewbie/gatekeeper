@@ -150,7 +150,14 @@ func prepareServer() {
 		}
 
 		// write data from backend to client
-		c.DataFromReader(r.StatusCode, r.Resp.ContentLength, c.GetHeader("Content-Type"), r.Resp.Body, respHeader)
+		if r.Resp.Body == nil {
+			c.Status(r.StatusCode)
+			for k, v := range respHeader {
+				c.Header(k, v)
+			}
+		} else {
+			c.DataFromReader(r.StatusCode, r.Resp.ContentLength, c.GetHeader("Content-Type"), r.Resp.Body, respHeader)
+		}
 
 		rail.Debugf("proxy request handled")
 	})
