@@ -11,6 +11,7 @@ consul:
   enabled: true
   consulAddress: consul:8500
   healthCheckUrl: /health
+  fetchServerInterval: 5
 
 tracing.propagation.keys:
   - id
