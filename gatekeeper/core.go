@@ -97,7 +97,8 @@ func prepareServer() {
 		if c.Request.URL.RawQuery != "" {
 			relPath += "?" + c.Request.URL.RawQuery
 		}
-		cli := miso.NewTClient(rail, relPath, gatewayClient).
+		cli := miso.NewTClient(rail, relPath).
+			UseClient(gatewayClient).
 			EnableServiceDiscovery(sp.ServiceName).
 			EnableTracing()
 
