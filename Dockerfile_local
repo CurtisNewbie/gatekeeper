@@ -12,5 +12,5 @@ COPY gatekeeper_build ./app_gatekeeper
 
 ENV TZ=Asia/Shanghai
 
-CMD ["./app_gatekeeper", "configFile=/usr/src/config/app-conf-prod.yml"]
+CMD ["./app_gatekeeper", "configFile=/usr/src/config/conf.yml"]
 
