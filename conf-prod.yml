@@ -35,5 +35,3 @@ metrics:
   auth:
     enabled: true
     bearer: ${METRICS_BEARER}
-  memstat.log.job:
-    enabled: true
