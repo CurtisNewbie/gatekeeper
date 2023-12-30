@@ -29,3 +29,11 @@ jwt:
     public: ${jwt-module.publicKey}
     private: ${jwt-module.privateKey}
     issuer: "yongj.zhuang-auth-service"
+
+metrics:
+  enabled: true
+  auth:
+    enabled: true
+    bearer: ${METRICS_BEARER}
+  memstat.log.job:
+    enabled: true

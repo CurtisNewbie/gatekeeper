@@ -42,7 +42,6 @@ func Bootstrap(args []string) {
 func prepareServer() {
 	common.LoadBuiltinPropagationKeys()
 
-	miso.SetProp(miso.PropMetricsEnabled, false)                   // disable prometheus
 	miso.SetProp(miso.PropServerPropagateInboundTrace, false)      // disable trace propagation, we are the entry point
 	miso.SetProp(miso.PropConsulRegisterDefaultHealthcheck, false) // disable the default health check endpoint to avoid conflicts
 	miso.SetProp(miso.PropConsulHealthcheckUrl, healthCheckPath)   // for consul health check
