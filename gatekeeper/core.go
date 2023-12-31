@@ -8,6 +8,7 @@ import (
 	"github.com/curtisnewbie/gocommon/common"
 	"github.com/curtisnewbie/miso/miso"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -17,6 +18,7 @@ const (
 var (
 	errPathNotFound = miso.NewErr("Path not found")
 	gatewayClient   *http.Client
+	timerHistoVec   *prometheus.HistogramVec
 )
 
 func init() {
@@ -26,6 +28,9 @@ func init() {
 	transport.MaxIdleConnsPerHost = 1000
 	transport.IdleConnTimeout = time.Minute * 10 // make sure that we can maximize the re-use of connnections
 	gatewayClient.Transport = transport
+
+	timerHistoVec = prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "gatekeeper_request_duration"}, []string{"url"})
+	prometheus.DefaultRegisterer.MustRegister(timerHistoVec)
 }
 
 type ServicePath struct {
@@ -48,28 +53,14 @@ func prepareServer() {
 	miso.PerfLogExclPath(healthCheckPath)                          // do not measure perf for healthcheck
 
 	// bootstrap metrics and prometheus stuff manually
-	metricsEndpoint := miso.GetPropStr(miso.PropMetricsRoute)
-	prometheusHandler := miso.PrometheusHandler()
 	miso.ManualBootstrapPrometheus()
-	miso.PerfLogExclPath(metricsEndpoint)
 
-	miso.RawAny("/*proxyPath", func(c *gin.Context, rail miso.Rail) {
+	miso.RawAny("/*proxyPath", WrapMetricsHandler(func(c *gin.Context, rail miso.Rail) {
 		rail.Debugf("Request: %v %v, headers: %v", c.Request.Method, c.Request.URL.Path, c.Request.Header)
 
 		// check if it's a healthcheck endpoint (for consul), we don't really return anything, so it's fine to expose it
 		if c.Request.URL.Path == healthCheckPath {
 			c.AbortWithStatus(200)
-			return
-		}
-
-		// metrics endpoint
-		if c.Request.URL.Path == metricsEndpoint {
-			if !miso.GetPropBool(miso.PropMetricsEnabled) {
-				rail.Warnf("Invalid request, metrics endpoint is disabled")
-				c.AbortWithStatus(404)
-				return
-			}
-			prometheusHandler.ServeHTTP(c.Writer, c.Request)
 			return
 		}
 
@@ -177,7 +168,7 @@ func prepareServer() {
 		}
 
 		rail.Debugf("proxy request handled")
-	})
+	}))
 }
 
 func parseServicePath(url string) (ServicePath, error) {
@@ -204,4 +195,38 @@ func parseServicePath(url string) (ServicePath, error) {
 		ServiceName: string(rurl[0:start]),
 		Path:        string(rurl[start:]),
 	}, nil
+}
+
+func WrapMetricsHandler(handler miso.RawTRouteHandler) miso.RawTRouteHandler {
+
+	metricsEndpoint := miso.GetPropStr(miso.PropMetricsRoute)
+	miso.PerfLogExclPath(metricsEndpoint)
+
+	if !miso.GetPropBool(miso.PropMetricsEnabled) {
+		return func(c *gin.Context, rail miso.Rail) {
+			if c.Request.URL.Path == metricsEndpoint {
+				rail.Warnf("Invalid request, metrics endpoint is disabled")
+				c.AbortWithStatus(404)
+				return
+			}
+			handler(c, rail)
+		}
+	}
+
+	prometheusHandler := miso.PrometheusHandler()
+	return func(c *gin.Context, rail miso.Rail) {
+		start := time.Now()
+
+		if c.Request.URL.Path == metricsEndpoint {
+			prometheusHandler.ServeHTTP(c.Writer, c.Request)
+			return
+		}
+
+		// prometheus, observe time took for each request
+		defer func() {
+			timerHistoVec.WithLabelValues(c.Request.URL.Path).Observe(float64(time.Since(start).Milliseconds()))
+		}()
+
+		handler(c, rail)
+	}
 }

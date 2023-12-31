@@ -6,6 +6,7 @@ require (
 	github.com/curtisnewbie/gocommon v1.1.3
 	github.com/curtisnewbie/miso v0.0.13-beta.2
 	github.com/gin-gonic/gin v1.8.1
+	github.com/prometheus/client_golang v1.4.0
 )
 
 require (
@@ -49,7 +50,6 @@ require (
 	github.com/natefinch/lumberjack v2.0.0+incompatible // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.5 // indirect
-	github.com/prometheus/client_golang v1.4.0 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.9.1 // indirect
 	github.com/prometheus/procfs v0.0.8 // indirect
