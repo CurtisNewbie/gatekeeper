@@ -14,7 +14,7 @@ import (
 var (
 	errPathNotFound = miso.NewErr("Path not found")
 	gatewayClient   *http.Client
-	timerHistoVec   *prometheus.HistogramVec
+	timerHistoVec   *prometheus.HistogramVec = miso.NewPromHistoVec("gatekeeper_request_duration", []string{"url"})
 )
 
 func init() {
@@ -24,9 +24,6 @@ func init() {
 	transport.MaxIdleConnsPerHost = 1000
 	transport.IdleConnTimeout = time.Minute * 10 // make sure that we can maximize the re-use of connnections
 	gatewayClient.Transport = transport
-
-	timerHistoVec = prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "gatekeeper_request_duration"}, []string{"url"})
-	prometheus.DefaultRegisterer.MustRegister(timerHistoVec)
 }
 
 type ServicePath struct {
@@ -122,17 +119,15 @@ func WrapMetricsHandler(handler miso.RawTRouteHandler) miso.RawTRouteHandler {
 
 	prometheusHandler := miso.PrometheusHandler()
 	return func(c *gin.Context, rail miso.Rail) {
-		start := time.Now()
+
+		// prometheus, observe time took for each request
+		timer := miso.NewVecTimer(timerHistoVec)
+		defer timer.ObserveDuration(c.Request.URL.Path)
 
 		if c.Request.URL.Path == metricsEndpoint {
 			prometheusHandler.ServeHTTP(c.Writer, c.Request)
 			return
 		}
-
-		// prometheus, observe time took for each request
-		defer func() {
-			timerHistoVec.WithLabelValues(c.Request.URL.Path).Observe(float64(time.Since(start).Milliseconds()))
-		}()
 
 		handler(c, rail)
 	}
