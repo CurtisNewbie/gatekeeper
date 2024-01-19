@@ -3,3 +3,12 @@
 Simple custom-made gateway written in Go. You don't need a specialized framework, you can just write one for yourself :D
 
 This project is backed by [curtisnewbie/miso](https://github.com/curtisnewbie/miso).
+
+## Configuration
+
+Check [miso](https://github.com/curtisnewbie/miso) and [gocommon](https://github.com/curtisnewbie/gocommon) for more about configuration.
+
+| Property                   | Description                                              | Default Value |
+|----------------------------|----------------------------------------------------------|---------------|
+| gatekeeper.timer.path.excl | slice of paths that are not measured by prometheus timer |               |
+

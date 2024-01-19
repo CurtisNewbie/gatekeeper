@@ -35,3 +35,8 @@ metrics:
   auth:
     enabled: true
     bearer: ${METRICS_BEARER}
+
+gatekeeper.timer.path.excl:
+  - "/fstore/file/raw"
+  - "/fstore/file/stream"
+  - "/metrics"

@@ -15,6 +15,7 @@ var (
 	errPathNotFound = miso.NewErr("Path not found")
 	gatewayClient   *http.Client
 	timerHistoVec   *prometheus.HistogramVec = miso.NewPromHistoVec("gatekeeper_request_duration", []string{"url"})
+	timerExclPath                            = miso.NewSet[string]()
 )
 
 func init() {
@@ -33,7 +34,10 @@ type ServicePath struct {
 
 func Bootstrap(args []string) {
 	prepareFilters()
-	prepareServer()
+	miso.PreServerBootstrap(func(rail miso.Rail) error {
+		prepareServer()
+		return nil
+	})
 	miso.BootstrapServer(args)
 }
 
@@ -47,6 +51,12 @@ func prepareServer() {
 
 	// healthcheck -> metrics -> proxy
 	miso.RawAny("/*proxyPath", WrapHealthHandler(WrapMetricsHandler(ProxyRequestHandler)))
+
+	// paths that are not measured by prometheus timer
+	excluded := miso.GetPropStrSlice(PropTimerExclPath)
+	if len(excluded) > 0 {
+		timerExclPath.AddAll(excluded)
+	}
 }
 
 func parseServicePath(url string) (ServicePath, error) {
@@ -120,13 +130,15 @@ func WrapMetricsHandler(handler miso.RawTRouteHandler) miso.RawTRouteHandler {
 	prometheusHandler := miso.PrometheusHandler()
 	return func(c *gin.Context, rail miso.Rail) {
 
-		// prometheus, observe time took for each request
-		timer := miso.NewVecTimer(timerHistoVec)
-		defer timer.ObserveDuration(c.Request.URL.Path)
-
 		if c.Request.URL.Path == metricsEndpoint {
 			prometheusHandler.ServeHTTP(c.Writer, c.Request)
 			return
+		}
+
+		if !timerExclPath.Has(c.Request.URL.Path) {
+			// prometheus, observe time took for each request
+			timer := miso.NewVecTimer(timerHistoVec)
+			defer timer.ObserveDuration(c.Request.URL.Path)
 		}
 
 		handler(c, rail)
