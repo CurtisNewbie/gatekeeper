@@ -57,6 +57,24 @@ func prepareServer() {
 	if len(excluded) > 0 {
 		timerExclPath.AddAll(excluded)
 	}
+	timerExclPath.Add(miso.GetPropStr(miso.PropMetricsRoute))
+
+	// prometheus, observe time took for each request
+	if miso.GetPropBool(miso.PropMetricsEnabled) {
+		miso.PreProcessGin(func(rail miso.Rail, engine *gin.Engine) {
+			rail.Debug("Using middleware for metrics collection")
+			engine.Use(func(c *gin.Context) {
+				if timerExclPath.Has(c.Request.URL.Path) {
+					c.Next()
+					return
+				}
+
+				timer := miso.NewVecTimer(timerHistoVec)
+				c.Next()
+				timer.ObserveDuration(c.Request.URL.Path)
+			})
+		})
+	}
 }
 
 func parseServicePath(url string) (ServicePath, error) {
@@ -134,13 +152,6 @@ func WrapMetricsHandler(handler miso.RawTRouteHandler) miso.RawTRouteHandler {
 			prometheusHandler.ServeHTTP(c.Writer, c.Request)
 			return
 		}
-
-		if !timerExclPath.Has(c.Request.URL.Path) {
-			// prometheus, observe time took for each request
-			timer := miso.NewVecTimer(timerHistoVec)
-			defer timer.ObserveDuration(c.Request.URL.Path)
-		}
-
 		handler(c, rail)
 	}
 }
