@@ -152,10 +152,10 @@ func prepareFilters() {
 
 		u := v.(common.User)
 		pc.Rail = pc.Rail.
-			WithCtxVal("id", u.UserId).
-			WithCtxVal("username", u.Username).
-			WithCtxVal("userno", u.UserNo).
-			WithCtxVal("roleno", u.RoleNo)
+			WithCtxVal("x-id", u.UserId).
+			WithCtxVal("x-username", u.Username).
+			WithCtxVal("x-userno", u.UserNo).
+			WithCtxVal("x-roleno", u.RoleNo)
 
 		pc.Rail.Debugf("Setup trace for user info, rail: %+v", pc.Rail)
 		return NewFilterResult(pc, true), nil

@@ -13,12 +13,6 @@ consul:
   healthCheckUrl: /health
   fetchServerInterval: 5
 
-tracing.propagation.keys:
-  - id
-  - userno
-  - username
-  - roleno
-
 logging:
   rolling:
     file: "/usr/src/logs/${app.name}.log"

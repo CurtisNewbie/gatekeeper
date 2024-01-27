@@ -191,8 +191,8 @@ func ProxyRequestHandler(c *gin.Context, rail miso.Rail) {
 	rail = pc.Rail
 
 	// set trace back to Gin for the PerfMiddleware, this feels like a hack, but we have to do this
-	c.Set(miso.X_TRACEID, rail.CtxValStr(miso.X_TRACEID))
-	c.Set(miso.X_SPANID, rail.CtxValStr(miso.X_SPANID))
+	c.Set(miso.XTraceId, rail.CtxValStr(miso.XTraceId))
+	c.Set(miso.XSpanId, rail.CtxValStr(miso.XSpanId))
 
 	// route requests dynamically using service discovery
 	relPath := sp.Path
