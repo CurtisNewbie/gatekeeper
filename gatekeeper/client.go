@@ -15,7 +15,7 @@ type TestResAccessResp struct {
 // Test whether this role has access to the url
 func TestResourceAccess(c miso.Rail, req TestResAccessReq) (TestResAccessResp, error) {
 	var r miso.GnResp[TestResAccessResp]
-	err := miso.NewDynTClient(c, "/remote/path/resource/access-test", "goauth").
+	err := miso.NewDynTClient(c, "/remote/path/resource/access-test", "user-vault").
 		EnableTracing().
 		PostJson(req).
 		Json(&r)
