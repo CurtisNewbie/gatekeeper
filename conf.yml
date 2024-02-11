@@ -10,10 +10,6 @@ server:
 consul:
   enabled: true
   consulAddress: localhost:8500
-  healthCheckUrl: /health
-  healthCheckInterval: 120s
-  healthCheckTimeout: 120s
-  healthCheckFailedDeregisterAfter: 120s
 
 logging:
   level: info

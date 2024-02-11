@@ -10,8 +10,6 @@ server:
 consul:
   enabled: true
   consulAddress: consul:8500
-  healthCheckUrl: /health
-  fetchServerInterval: 5
 
 logging:
   rolling:
