@@ -3,6 +3,7 @@ package gatekeeper
 import (
 	"fmt"
 	"net/http"
+	"path"
 	"strconv"
 	"sync"
 
@@ -111,16 +112,30 @@ func prepareFilters() {
 			roleNo = u.RoleNo
 		}
 
-		r, err := ValidateResourceAccess(rail, TestResAccessReq{
-			Url:    c.Request.URL.Path,
-			Method: c.Request.Method,
-			RoleNo: roleNo,
-		})
+		inWhitelist := false
+		for _, pat := range miso.GetPropStrSlice(PropWhitelistPathPatterns) {
+			if ok, _ := path.Match(pat, c.Request.URL.Path); ok {
+				inWhitelist = true
+				break
+			}
+		}
 
-		if err != nil {
-			c.AbortWithStatus(http.StatusForbidden)
-			rail.Warnf("Request forbidden, err: %v", err)
-			return NewFilterResult(pc, false), nil
+		var r TestResAccessResp
+		if inWhitelist {
+			r = TestResAccessResp{true}
+		} else {
+			var err error
+			r, err = ValidateResourceAccess(rail, TestResAccessReq{
+				Url:    c.Request.URL.Path,
+				Method: c.Request.Method,
+				RoleNo: roleNo,
+			})
+
+			if err != nil {
+				c.AbortWithStatus(http.StatusForbidden)
+				rail.Warnf("Request forbidden, err: %v", err)
+				return NewFilterResult(pc, false), nil
+			}
 		}
 
 		if !r.Valid {
