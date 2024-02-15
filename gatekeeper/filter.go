@@ -120,12 +120,12 @@ func prepareFilters() {
 			}
 		}
 
-		var r TestResAccessResp
+		var r CheckResAccessResp
 		if inWhitelist {
-			r = TestResAccessResp{true}
+			r = CheckResAccessResp{true}
 		} else {
 			var err error
-			r, err = ValidateResourceAccess(rail, TestResAccessReq{
+			r, err = ValidateResourceAccess(rail, CheckResAccessReq{
 				Url:    c.Request.URL.Path,
 				Method: c.Request.Method,
 				RoleNo: roleNo,
