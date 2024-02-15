@@ -3,6 +3,8 @@ package gatekeeper
 import (
 	"errors"
 	"net/http"
+	"net/http/pprof"
+	"strings"
 	"time"
 
 	"github.com/curtisnewbie/gocommon/common"
@@ -45,6 +47,7 @@ func prepareServer(rail miso.Rail) error {
 
 	miso.SetProp(miso.PropServerPropagateInboundTrace, false)      // disable trace propagation, we are the entry point
 	miso.SetProp(miso.PropServerGenerateEndpointDocEnabled, false) // do not generate apidoc
+	miso.SetProp(miso.PropConsulRegisterDefaultHealthcheck, false) // disable the default health check endpoint to avoid conflicts
 
 	// bootstrap metrics and prometheus stuff manually
 	miso.ManualBootstrapPrometheus()
@@ -52,17 +55,16 @@ func prepareServer(rail miso.Rail) error {
 	// handle pprof endpoints manually
 	miso.ManualPprofRegister()
 
-	// healthcheck -> metrics -> proxy
+	// healthcheck -> metrics -> pprof -> proxy
 	handler := WrapHealthHandler(
-		WrapMetricsHandler(ProxyRequestHandler),
+		WrapMetricsHandler(
+			WrapPprofHandler(ProxyRequestHandler),
+		),
 	)
 	miso.RawAny("/*proxyPath", handler)
 
 	// paths that are not measured by prometheus timer
-	excluded := miso.GetPropStrSlice(PropTimerExclPath)
-	if len(excluded) > 0 {
-		timerExclPath.AddAll(excluded)
-	}
+	timerExclPath.AddAll(miso.GetPropStrSlice(PropTimerExclPath))
 	timerExclPath.Add(miso.GetPropStr(miso.PropMetricsRoute))
 
 	// prometheus, observe time took for each request
@@ -111,9 +113,6 @@ func parseServicePath(url string) (ServicePath, error) {
 }
 
 func WrapHealthHandler(handler miso.RawTRouteHandler) miso.RawTRouteHandler {
-
-	// disable the default health check endpoint to avoid conflicts
-	miso.SetProp(miso.PropConsulRegisterDefaultHealthcheck, false)
 
 	healthcheckPath := miso.GetPropStr(miso.PropConsulHealthcheckUrl)
 	if miso.IsBlankStr(healthcheckPath) {
@@ -270,4 +269,39 @@ func ProxyRequestHandler(c *gin.Context, rail miso.Rail) {
 	}
 
 	rail.Debugf("proxy request handled")
+}
+
+func WrapPprofHandler(handler miso.RawTRouteHandler) miso.RawTRouteHandler {
+
+	if miso.IsProdMode() && !miso.GetPropBool(miso.PropServerPprofEnabled) {
+		return handler
+	}
+
+	miso.PerfLogExclPath("/debug/pprof")
+	miso.PerfLogExclPath("/debug/pprof/cmdline")
+	miso.PerfLogExclPath("/debug/pprof/profile")
+	miso.PerfLogExclPath("/debug/pprof/symbol")
+	miso.PerfLogExclPath("/debug/pprof/trace")
+
+	return func(c *gin.Context, rail miso.Rail) {
+
+		if c.Request.URL.Path == "/debug/pprof/cmdline" {
+			pprof.Cmdline(c.Writer, c.Request)
+			return
+		} else if c.Request.URL.Path == "/debug/pprof/profile" {
+			pprof.Profile(c.Writer, c.Request)
+			return
+		} else if c.Request.URL.Path == "/debug/pprof/symbol" {
+			pprof.Symbol(c.Writer, c.Request)
+			return
+		} else if c.Request.URL.Path == "/debug/pprof/trace" {
+			pprof.Trace(c.Writer, c.Request)
+			return
+		} else if strings.HasPrefix(c.Request.URL.Path, "/debug/pprof") {
+			pprof.Index(c.Writer, c.Request)
+			return
+		}
+
+		handler(c, rail)
+	}
 }
