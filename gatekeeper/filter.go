@@ -111,7 +111,7 @@ func prepareFilters() {
 			roleNo = u.RoleNo
 		}
 
-		r, err := TestResourceAccess(rail, TestResAccessReq{
+		r, err := ValidateResourceAccess(rail, TestResAccessReq{
 			Url:    c.Request.URL.Path,
 			Method: c.Request.Method,
 			RoleNo: roleNo,

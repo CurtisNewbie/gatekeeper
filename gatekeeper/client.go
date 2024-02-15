@@ -12,8 +12,8 @@ type TestResAccessResp struct {
 	Valid bool `json:"valid"`
 }
 
-// Test whether this role has access to the url
-func TestResourceAccess(c miso.Rail, req TestResAccessReq) (TestResAccessResp, error) {
+// Check whether this role has access to the url
+func ValidateResourceAccess(c miso.Rail, req TestResAccessReq) (TestResAccessResp, error) {
 	var r miso.GnResp[TestResAccessResp]
 	err := miso.NewDynTClient(c, "/remote/path/resource/access-test", "user-vault").
 		EnableTracing().

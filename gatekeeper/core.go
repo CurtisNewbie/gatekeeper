@@ -49,8 +49,14 @@ func prepareServer() {
 	// bootstrap metrics and prometheus stuff manually
 	miso.ManualBootstrapPrometheus()
 
+	// handle pprof endpoints manually
+	miso.ManualPprofRegister()
+
 	// healthcheck -> metrics -> proxy
-	miso.RawAny("/*proxyPath", WrapHealthHandler(WrapMetricsHandler(ProxyRequestHandler)))
+	handler := WrapHealthHandler(
+		WrapMetricsHandler(ProxyRequestHandler),
+	)
+	miso.RawAny("/*proxyPath", handler)
 
 	// paths that are not measured by prometheus timer
 	excluded := miso.GetPropStrSlice(PropTimerExclPath)
