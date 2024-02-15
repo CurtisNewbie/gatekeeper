@@ -3,8 +3,8 @@ module github.com/curtisnewbie/gatekeeper
 go 1.18
 
 require (
-	github.com/curtisnewbie/gocommon v1.1.7
-	github.com/curtisnewbie/miso v0.0.17
+	github.com/curtisnewbie/gocommon v1.1.11
+	github.com/curtisnewbie/miso v0.0.24
 	github.com/gin-gonic/gin v1.8.1
 	github.com/prometheus/client_golang v1.4.0
 )

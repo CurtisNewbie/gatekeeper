@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	errPathNotFound = miso.NewErr("Path not found")
+	errPathNotFound = miso.NewErrf("Path not found")
 	gatewayClient   *http.Client
 	timerHistoVec   *prometheus.HistogramVec = miso.NewPromHistoVec("gatekeeper_request_duration", []string{"url"})
 	timerExclPath                            = miso.NewSet[string]()
@@ -44,7 +44,8 @@ func Bootstrap(args []string) {
 func prepareServer() {
 	common.LoadBuiltinPropagationKeys()
 
-	miso.SetProp(miso.PropServerPropagateInboundTrace, false) // disable trace propagation, we are the entry point
+	miso.SetProp(miso.PropServerPropagateInboundTrace, false)      // disable trace propagation, we are the entry point
+	miso.SetProp(miso.PropServerGenerateEndpointDocEnabled, false) // do not generate apidoc
 
 	// bootstrap metrics and prometheus stuff manually
 	miso.ManualBootstrapPrometheus()
@@ -184,7 +185,7 @@ func ProxyRequestHandler(c *gin.Context, rail miso.Rail) {
 		if err != nil || !fr.Next {
 			rail.Debugf("request filtered, err: %v, ok: %v", err, fr)
 			if err != nil {
-				miso.DispatchErrJson(c, rail, err)
+				miso.DispatchJson(c, miso.WrapResp(rail, nil, err, c.Request.RequestURI))
 				return
 			}
 
@@ -243,7 +244,7 @@ func ProxyRequestHandler(c *gin.Context, rail miso.Rail) {
 			return
 		}
 
-		miso.DispatchErrJson(c, rail, r.Err)
+		miso.DispatchJson(c, miso.WrapResp(rail, nil, err, c.Request.RequestURI))
 		return
 	}
 	defer r.Close()
