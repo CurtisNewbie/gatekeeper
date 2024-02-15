@@ -34,15 +34,14 @@ type ServicePath struct {
 
 func Bootstrap(args []string) {
 	prepareFilters()
-	miso.PreServerBootstrap(func(rail miso.Rail) error {
-		prepareServer()
-		return nil
-	})
+	miso.PreServerBootstrap(prepareServer)
 	miso.BootstrapServer(args)
 }
 
-func prepareServer() {
+func prepareServer(rail miso.Rail) error {
 	common.LoadBuiltinPropagationKeys()
+
+	miso.Infof("gatekeeper version: %v", Version)
 
 	miso.SetProp(miso.PropServerPropagateInboundTrace, false)      // disable trace propagation, we are the entry point
 	miso.SetProp(miso.PropServerGenerateEndpointDocEnabled, false) // do not generate apidoc
@@ -82,6 +81,7 @@ func prepareServer() {
 			})
 		})
 	}
+	return nil
 }
 
 func parseServicePath(url string) (ServicePath, error) {
