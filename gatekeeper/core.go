@@ -49,6 +49,9 @@ func prepareServer(rail miso.Rail) error {
 	miso.SetProp(miso.PropServerGenerateEndpointDocEnabled, false) // do not generate apidoc
 	miso.SetProp(miso.PropConsulRegisterDefaultHealthcheck, false) // disable the default health check endpoint to avoid conflicts
 
+	// whitelisted path patterns
+	whitelistPatterns = miso.GetPropStrSlice(PropWhitelistPathPatterns)
+
 	// bootstrap metrics and prometheus stuff manually
 	miso.ManualBootstrapPrometheus()
 

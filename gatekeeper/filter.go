@@ -27,8 +27,9 @@ func NewFilterResult(pc ProxyContext, next bool) FilterResult {
 // ------------------------------------------------------------
 
 var (
-	filters []Filter = []Filter{}
-	rwmu    sync.RWMutex
+	filters           []Filter = []Filter{}
+	rwmu              sync.RWMutex
+	whitelistPatterns []string
 )
 
 // ------------------------------------------------------------
@@ -113,7 +114,7 @@ func prepareFilters() {
 		}
 
 		inWhitelist := false
-		for _, pat := range miso.GetPropStrSlice(PropWhitelistPathPatterns) {
+		for _, pat := range whitelistPatterns {
 			if ok, _ := path.Match(pat, c.Request.URL.Path); ok {
 				inWhitelist = true
 				break
