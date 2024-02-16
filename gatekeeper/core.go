@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/curtisnewbie/gocommon/common"
@@ -16,8 +17,14 @@ import (
 var (
 	errPathNotFound = miso.NewErrf("Path not found")
 	gatewayClient   *http.Client
-	timerHistoVec   *prometheus.HistogramVec = miso.NewPromHistoVec("gatekeeper_request_duration", []string{"url"})
-	timerExclPath                            = miso.NewSet[string]()
+
+	timerHistoVec     *prometheus.HistogramVec = miso.NewPromHistoVec("gatekeeper_request_duration", []string{"url"})
+	timerExclPath                              = miso.NewSet[string]()
+	histoVecTimerPool                          = sync.Pool{
+		New: func() any {
+			return miso.NewVecTimer(timerHistoVec)
+		},
+	}
 )
 
 func init() {
@@ -80,9 +87,11 @@ func prepareServer(rail miso.Rail) error {
 					return
 				}
 
-				timer := miso.NewVecTimer(timerHistoVec)
+				timer := histoVecTimerPool.Get().(*miso.VecTimer)
 				c.Next()
 				timer.ObserveDuration(c.Request.URL.Path)
+				timer.Reset()
+				histoVecTimerPool.Put(timer)
 			})
 		})
 	}
