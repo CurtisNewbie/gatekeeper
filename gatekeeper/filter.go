@@ -142,15 +142,14 @@ func prepareFilters() {
 		if !r.Valid {
 			rail.Warnf("Request forbidden (resource access not authorized), url: %v, user: %+v", c.Request.URL.Path, u)
 
-			authorization := pc.Gin.GetHeader("Authorization")
-
-			// token invalid or expired
-			if authorization != "" {
-				c.AbortWithStatus(http.StatusUnauthorized)
+			// authenticated, but doesn't have enough authority to access the endpoint
+			if !u.IsNil {
+				c.AbortWithStatus(http.StatusForbidden)
 				return NewFilterResult(pc, false), nil
 			}
 
-			c.AbortWithStatus(http.StatusForbidden) // request authenticated, but doesn't have enouth authority to access the endpoint
+			// token invalid or expired
+			c.AbortWithStatus(http.StatusUnauthorized)
 			return NewFilterResult(pc, false), nil
 		}
 
