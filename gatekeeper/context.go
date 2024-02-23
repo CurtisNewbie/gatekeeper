@@ -33,8 +33,9 @@ func (pc *ProxyContext) GetAttr(key string) (any, bool) {
 	return v, ok
 }
 
-func NewProxyContext(inb *miso.Inbound) ProxyContext {
+func NewProxyContext(rail miso.Rail, inb *miso.Inbound) ProxyContext {
 	return ProxyContext{
+		Rail: rail,
 		attr: nil,
 		Inb:  inb,
 	}

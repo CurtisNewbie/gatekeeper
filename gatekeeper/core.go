@@ -179,16 +179,16 @@ func ProxyRequestHandler(inb *miso.Inbound) {
 	rail.Debugf("Request: %v %v, headers: %v", r.Method, r.URL.Path, r.Header)
 
 	// parse the request path, extract service name, and the relative url for the backend server
-	sp, err := parseServicePath(r.URL.Path)
-	rail.Debugf("parsed servicePath: %+v, err: %v", sp, err)
-
-	if err != nil {
+	var sp ServicePath
+	var err error
+	if sp, err = parseServicePath(r.URL.Path); err != nil {
 		rail.Warnf("Invalid request, %v", err)
 		w.WriteHeader(404)
 		return
 	}
+	rail.Debugf("parsed service path: %#v", sp)
 
-	pc := NewProxyContext(inb)
+	pc := NewProxyContext(rail, inb)
 	pc.SetAttr(SERVICE_PATH, sp)
 
 	filters := GetFilters()
@@ -251,8 +251,7 @@ func ProxyRequestHandler(inb *miso.Inbound) {
 			w.WriteHeader(404)
 			return
 		}
-
-		inb.HandleResult(miso.WrapResp(rail, nil, err, r.RequestURI), nil)
+		inb.HandleResult(miso.WrapResp(rail, nil, tr.Err, r.RequestURI), nil)
 		return
 	}
 	defer tr.Close()
