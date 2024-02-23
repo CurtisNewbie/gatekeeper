@@ -2,6 +2,7 @@ package gatekeeper
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"net/http/pprof"
 	"strings"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/curtisnewbie/gocommon/common"
 	"github.com/curtisnewbie/miso/miso"
-	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -66,35 +66,18 @@ func prepareServer(rail miso.Rail) error {
 	miso.ManualPprofRegister()
 
 	// healthcheck -> metrics -> pprof -> proxy
-	handler := WrapHealthHandler(
-		WrapMetricsHandler(
-			WrapPprofHandler(ProxyRequestHandler),
-		),
-	)
+	handler :=
+		WrapHealthHandler(
+			WrapMetricsHandler(
+				WrapPprofHandler(ProxyRequestHandler),
+			),
+		)
+
 	miso.RawAny("/*proxyPath", handler)
 
 	// paths that are not measured by prometheus timer
 	timerExclPath.AddAll(miso.GetPropStrSlice(PropTimerExclPath))
 	timerExclPath.Add(miso.GetPropStr(miso.PropMetricsRoute))
-
-	// prometheus, observe time took for each request
-	if miso.GetPropBool(miso.PropMetricsEnabled) {
-		miso.PreProcessGin(func(rail miso.Rail, engine *gin.Engine) {
-			rail.Debug("Using middleware for metrics collection")
-			engine.Use(func(c *gin.Context) {
-				if timerExclPath.Has(c.Request.URL.Path) {
-					c.Next()
-					return
-				}
-
-				timer := histoVecTimerPool.Get().(*miso.VecTimer)
-				c.Next()
-				timer.ObserveDuration(c.Request.URL.Path)
-				timer.Reset()
-				histoVecTimerPool.Put(timer)
-			})
-		})
-	}
 	return nil
 }
 
@@ -132,62 +115,80 @@ func WrapHealthHandler(handler miso.RawTRouteHandler) miso.RawTRouteHandler {
 	}
 
 	miso.PerfLogExclPath(healthcheckPath)
-	return func(c *gin.Context, rail miso.Rail) {
+	return func(inb *miso.Inbound) {
+		w, r := inb.Unwrap()
 		// check if it's a healthcheck endpoint (for consul), we don't really return anything, so it's fine to expose it
-		if c.Request.URL.Path == healthcheckPath {
-			c.AbortWithStatus(200)
+		if r.URL.Path == healthcheckPath {
+			w.WriteHeader(200)
 			return
 		}
 
-		handler(c, rail)
+		handler(inb)
 	}
 }
 
 func WrapMetricsHandler(handler miso.RawTRouteHandler) miso.RawTRouteHandler {
 
 	metricsEndpoint := miso.GetPropStr(miso.PropMetricsRoute)
-	miso.PerfLogExclPath(metricsEndpoint)
-
-	if miso.IsBlankStr(metricsEndpoint) {
-		return handler
+	if !miso.IsBlankStr(metricsEndpoint) {
+		miso.PerfLogExclPath(metricsEndpoint)
 	}
 
 	if !miso.GetPropBool(miso.PropMetricsEnabled) {
-		return func(c *gin.Context, rail miso.Rail) {
-			if c.Request.URL.Path == metricsEndpoint {
+		return func(inb *miso.Inbound) {
+			w, r := inb.Unwrap()
+			rail := inb.Rail()
+			if r.URL.Path == metricsEndpoint {
 				rail.Warnf("Invalid request, metrics endpoint is disabled")
-				c.AbortWithStatus(404)
+				w.WriteHeader(404)
 				return
 			}
-			handler(c, rail)
+			handler(inb)
 		}
 	}
 
 	prometheusHandler := miso.PrometheusHandler()
-	return func(c *gin.Context, rail miso.Rail) {
+	return func(inb *miso.Inbound) {
+		w, r := inb.Unwrap()
 
-		if c.Request.URL.Path == metricsEndpoint {
-			prometheusHandler.ServeHTTP(c.Writer, c.Request)
+		if r.URL.Path == metricsEndpoint {
+			prometheusHandler.ServeHTTP(w, r)
 			return
 		}
-		handler(c, rail)
+
+		if timerExclPath.Has(r.URL.Path) {
+			handler(inb)
+			return
+		}
+
+		timer := histoVecTimerPool.Get().(*miso.VecTimer)
+		handler(inb) // handle the result
+		timer.ObserveDuration(r.URL.Path)
+		PutHistoVecTimerPool(timer)
 	}
 }
 
-func ProxyRequestHandler(c *gin.Context, rail miso.Rail) {
-	rail.Debugf("Request: %v %v, headers: %v", c.Request.Method, c.Request.URL.Path, c.Request.Header)
+func PutHistoVecTimerPool(t *miso.VecTimer) {
+	t.Reset()
+	histoVecTimerPool.Put(t)
+}
+
+func ProxyRequestHandler(inb *miso.Inbound) {
+	rail := inb.Rail()
+	w, r := inb.Unwrap()
+	rail.Debugf("Request: %v %v, headers: %v", r.Method, r.URL.Path, r.Header)
 
 	// parse the request path, extract service name, and the relative url for the backend server
-	sp, err := parseServicePath(c.Request.URL.Path)
+	sp, err := parseServicePath(r.URL.Path)
 	rail.Debugf("parsed servicePath: %+v, err: %v", sp, err)
 
 	if err != nil {
 		rail.Warnf("Invalid request, %v", err)
-		c.AbortWithStatus(404)
+		w.WriteHeader(404)
 		return
 	}
 
-	pc := NewProxyContext(rail, c)
+	pc := NewProxyContext(inb)
 	pc.SetAttr(SERVICE_PATH, sp)
 
 	filters := GetFilters()
@@ -196,7 +197,7 @@ func ProxyRequestHandler(c *gin.Context, rail miso.Rail) {
 		if err != nil || !fr.Next {
 			rail.Debugf("request filtered, err: %v, ok: %v", err, fr)
 			if err != nil {
-				miso.DispatchJson(c, miso.WrapResp(rail, nil, err, c.Request.RequestURI))
+				inb.HandleResult(miso.WrapResp(rail, nil, err, r.RequestURI), nil)
 				return
 			}
 
@@ -208,14 +209,10 @@ func ProxyRequestHandler(c *gin.Context, rail miso.Rail) {
 	// continue propgating the trace
 	rail = pc.Rail
 
-	// set trace back to Gin for the PerfMiddleware, this feels like a hack, but we have to do this
-	c.Set(miso.XTraceId, rail.CtxValStr(miso.XTraceId))
-	c.Set(miso.XSpanId, rail.CtxValStr(miso.XSpanId))
-
 	// route requests dynamically using service discovery
 	relPath := sp.Path
-	if c.Request.URL.RawQuery != "" {
-		relPath += "?" + c.Request.URL.RawQuery
+	if r.URL.RawQuery != "" {
+		relPath += "?" + r.URL.RawQuery
 	}
 	cli := miso.NewTClient(rail, relPath).
 		UseClient(gatewayClient).
@@ -223,62 +220,58 @@ func ProxyRequestHandler(c *gin.Context, rail miso.Rail) {
 		EnableTracing()
 
 	// propagate all headers to client
-	for k, arr := range c.Request.Header {
+	for k, arr := range r.Header {
 		for i := range arr {
 			cli.AddHeader(k, arr[i])
 		}
 	}
 
-	var r *miso.TResponse
-	switch c.Request.Method {
+	var tr *miso.TResponse
+	switch r.Method {
 	case http.MethodGet:
-		r = cli.Get()
+		tr = cli.Get()
 	case http.MethodPut:
-		r = cli.Put(c.Request.Body)
+		tr = cli.Put(r.Body)
 	case http.MethodPost:
-		r = cli.Post(c.Request.Body)
+		tr = cli.Post(r.Body)
 	case http.MethodDelete:
-		r = cli.Delete()
+		tr = cli.Delete()
 	case http.MethodHead:
-		r = cli.Head()
+		tr = cli.Head()
 	case http.MethodOptions:
-		r = cli.Options()
+		tr = cli.Options()
 	default:
-		c.AbortWithStatus(404)
+		w.WriteHeader(404)
 		return
 	}
 
-	if r.Err != nil {
-		rail.Debugf("post proxy request, request failed, err: %v", r.Err)
-		if errors.Is(r.Err, miso.ErrConsulServiceInstanceNotFound) {
-			c.AbortWithStatus(404)
+	if tr.Err != nil {
+		rail.Debugf("post proxy request, request failed, err: %v", tr.Err)
+		if errors.Is(tr.Err, miso.ErrConsulServiceInstanceNotFound) {
+			w.WriteHeader(404)
 			return
 		}
 
-		miso.DispatchJson(c, miso.WrapResp(rail, nil, err, c.Request.RequestURI))
+		inb.HandleResult(miso.WrapResp(rail, nil, err, r.RequestURI), nil)
 		return
 	}
-	defer r.Close()
+	defer tr.Close()
 
-	rail.Debugf("post proxy request, proxied response headers: %v, status: %v", r.RespHeader, r.StatusCode)
+	rail.Debugf("post proxy request, proxied response headers: %v, status: %v", tr.RespHeader, tr.StatusCode)
 
 	// headers from backend servers
-	respHeader := map[string]string{}
-	for k, v := range r.RespHeader {
-		if len(v) > 0 {
-			respHeader[k] = v[0]
+	for k, v := range tr.RespHeader {
+		for _, hv := range v {
+			w.Header().Add(k, hv)
 		}
 	}
+	rail.Debug(w.Header())
 
 	// write data from backend to client
-	if r.Resp.Body == nil {
-		c.Status(r.StatusCode)
-		for k, v := range respHeader {
-			c.Header(k, v)
-		}
-	} else {
-		c.DataFromReader(r.StatusCode, r.Resp.ContentLength, c.GetHeader("Content-Type"), r.Resp.Body, respHeader)
+	if tr.Resp.Body != nil {
+		io.Copy(w, tr.Resp.Body)
 	}
+	w.WriteHeader(tr.StatusCode)
 
 	rail.Debugf("proxy request handled")
 }
@@ -295,25 +288,26 @@ func WrapPprofHandler(handler miso.RawTRouteHandler) miso.RawTRouteHandler {
 	miso.PerfLogExclPath("/debug/pprof/symbol")
 	miso.PerfLogExclPath("/debug/pprof/trace")
 
-	return func(c *gin.Context, rail miso.Rail) {
+	return func(inb *miso.Inbound) {
+		w, r := inb.Unwrap()
 
-		if c.Request.URL.Path == "/debug/pprof/cmdline" {
-			pprof.Cmdline(c.Writer, c.Request)
+		if r.URL.Path == "/debug/pprof/cmdline" {
+			pprof.Cmdline(w, r)
 			return
-		} else if c.Request.URL.Path == "/debug/pprof/profile" {
-			pprof.Profile(c.Writer, c.Request)
+		} else if r.URL.Path == "/debug/pprof/profile" {
+			pprof.Profile(w, r)
 			return
-		} else if c.Request.URL.Path == "/debug/pprof/symbol" {
-			pprof.Symbol(c.Writer, c.Request)
+		} else if r.URL.Path == "/debug/pprof/symbol" {
+			pprof.Symbol(w, r)
 			return
-		} else if c.Request.URL.Path == "/debug/pprof/trace" {
-			pprof.Trace(c.Writer, c.Request)
+		} else if r.URL.Path == "/debug/pprof/trace" {
+			pprof.Trace(w, r)
 			return
-		} else if strings.HasPrefix(c.Request.URL.Path, "/debug/pprof") {
-			pprof.Index(c.Writer, c.Request)
+		} else if strings.HasPrefix(r.URL.Path, "/debug/pprof") {
+			pprof.Index(w, r)
 			return
 		}
 
-		handler(c, rail)
+		handler(inb)
 	}
 }

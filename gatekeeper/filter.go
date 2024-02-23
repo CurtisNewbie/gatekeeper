@@ -55,7 +55,8 @@ func prepareFilters() {
 		rail := pc.Rail
 		next := true
 
-		authorization := pc.Gin.GetHeader("Authorization")
+		_, r := pc.Inb.Unwrap()
+		authorization := r.Header.Get("Authorization")
 		rail.Debugf("Authorization: %v", authorization)
 
 		// no token available
@@ -100,7 +101,7 @@ func prepareFilters() {
 
 	// second filter validate authorization
 	AddFilter(func(pc ProxyContext) (FilterResult, error) {
-		c := pc.Gin
+		w, r := pc.Inb.Unwrap()
 		rail := pc.Rail
 
 		rail.Debugf("proxyContext: %v", pc)
@@ -115,41 +116,41 @@ func prepareFilters() {
 
 		inWhitelist := false
 		for _, pat := range whitelistPatterns {
-			if ok, _ := path.Match(pat, c.Request.URL.Path); ok {
+			if ok, _ := path.Match(pat, r.URL.Path); ok {
 				inWhitelist = true
 				break
 			}
 		}
 
-		var r CheckResAccessResp
+		var cr CheckResAccessResp
 		if inWhitelist {
-			r = CheckResAccessResp{true}
+			cr = CheckResAccessResp{true}
 		} else {
 			var err error
-			r, err = ValidateResourceAccess(rail, CheckResAccessReq{
-				Url:    c.Request.URL.Path,
-				Method: c.Request.Method,
+			cr, err = ValidateResourceAccess(rail, CheckResAccessReq{
+				Url:    r.URL.Path,
+				Method: r.Method,
 				RoleNo: roleNo,
 			})
 
 			if err != nil {
-				c.AbortWithStatus(http.StatusForbidden)
+				w.WriteHeader(http.StatusForbidden)
 				rail.Warnf("Request forbidden, err: %v", err)
 				return NewFilterResult(pc, false), nil
 			}
 		}
 
-		if !r.Valid {
-			rail.Warnf("Request forbidden (resource access not authorized), url: %v, user: %+v", c.Request.URL.Path, u)
+		if !cr.Valid {
+			rail.Warnf("Request forbidden (resource access not authorized), url: %v, user: %+v", r.URL.Path, u)
 
 			// authenticated, but doesn't have enough authority to access the endpoint
 			if !u.IsNil {
-				c.AbortWithStatus(http.StatusForbidden)
+				w.WriteHeader(http.StatusForbidden)
 				return NewFilterResult(pc, false), nil
 			}
 
 			// token invalid or expired
-			c.AbortWithStatus(http.StatusUnauthorized)
+			w.WriteHeader(http.StatusUnauthorized)
 			return NewFilterResult(pc, false), nil
 		}
 
