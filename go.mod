@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/curtisnewbie/gocommon v1.1.11
-	github.com/curtisnewbie/miso v0.0.26-beta.3
+	github.com/curtisnewbie/miso v0.0.26
 	github.com/prometheus/client_golang v1.4.0
 )
 
