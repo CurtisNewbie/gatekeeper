@@ -219,10 +219,18 @@ func ProxyRequestHandler(inb *miso.Inbound) {
 		EnableServiceDiscovery(sp.ServiceName).
 		EnableTracing()
 
+	propagationKeys := miso.NewSet[string]()
+	propagationKeys.AddAll(miso.GetPropagationKeys())
+
 	// propagate all headers to client
 	for k, arr := range r.Header {
-		for i := range arr {
-			cli.AddHeader(k, arr[i])
+		// the inbound request may contain headers that are one of our propagation keys
+		// this can be a security problem
+		if propagationKeys.Has(k) {
+			continue
+		}
+		for _, v := range arr {
+			cli.AddHeader(k, v)
 		}
 	}
 
