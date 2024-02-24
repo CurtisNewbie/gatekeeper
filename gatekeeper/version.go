@@ -1,5 +1,5 @@
 package gatekeeper
 
 const (
-	Version = "v0.0.16"
+	Version = "v0.0.17"
 )
