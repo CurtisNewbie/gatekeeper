@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/curtisnewbie/gocommon/common"
+	"github.com/curtisnewbie/miso/middleware/user-vault/common"
 	"github.com/curtisnewbie/miso/miso"
 	"github.com/prometheus/client_golang/prometheus"
 )

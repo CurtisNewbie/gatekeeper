@@ -1,14 +1,13 @@
 package gatekeeper
 
 import (
-	"fmt"
 	"net/http"
 	"path"
-	"strconv"
 	"sync"
 
-	"github.com/curtisnewbie/gocommon/common"
+	"github.com/curtisnewbie/miso/middleware/user-vault/common"
 	"github.com/curtisnewbie/miso/miso"
+	"github.com/spf13/cast"
 )
 
 // ------------------------------------------------------------
@@ -78,20 +77,14 @@ func prepareFilters() {
 		claims := tkn.Claims
 		var user common.User
 
-		if v, ok := claims["id"]; ok {
-			n, err := strconv.Atoi(fmt.Sprintf("%v", v))
-			if err == nil {
-				user.UserId = n
-			}
+		if v, ok := claims[common.UsernameTraceKey]; ok {
+			user.Username = cast.ToString(v)
 		}
-		if v, ok := claims["username"]; ok {
-			user.Username = fmt.Sprintf("%v", v)
+		if v, ok := claims[common.UserNoTraceKey]; ok {
+			user.UserNo = cast.ToString(v)
 		}
-		if v, ok := claims["userno"]; ok {
-			user.UserNo = fmt.Sprintf("%v", v)
-		}
-		if v, ok := claims["roleno"]; ok {
-			user.RoleNo = fmt.Sprintf("%v", v)
+		if v, ok := claims[common.RoleNoTraceKey]; ok {
+			user.RoleNo = cast.ToString(v)
 		}
 		pc.SetAttr(AUTH_INFO, user)
 		rail.Debugf("set user to proxyContext: %v", pc)
@@ -167,12 +160,7 @@ func prepareFilters() {
 		}
 
 		u := v.(common.User)
-		pc.Rail = pc.Rail.
-			WithCtxVal("x-id", u.UserId).
-			WithCtxVal("x-username", u.Username).
-			WithCtxVal("x-userno", u.UserNo).
-			WithCtxVal("x-roleno", u.RoleNo)
-
+		pc.Rail = common.StoreUser(pc.Rail, u)
 		pc.Rail.Debugf("Setup trace for user info, rail: %+v", pc.Rail)
 		return NewFilterResult(pc, true), nil
 	})
