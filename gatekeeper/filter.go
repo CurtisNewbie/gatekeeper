@@ -77,16 +77,17 @@ func prepareFilters() {
 		claims := tkn.Claims
 		var user common.User
 
-		if v, ok := claims[common.UsernameTraceKey]; ok {
+		if v, ok := claims["username"]; ok {
 			user.Username = cast.ToString(v)
 		}
-		if v, ok := claims[common.UserNoTraceKey]; ok {
+		if v, ok := claims["userno"]; ok {
 			user.UserNo = cast.ToString(v)
 		}
-		if v, ok := claims[common.RoleNoTraceKey]; ok {
+		if v, ok := claims["roleno"]; ok {
 			user.RoleNo = cast.ToString(v)
 		}
 		pc.SetAttr(AUTH_INFO, user)
+		rail.Debugf("user: %#v", user)
 		rail.Debugf("set user to proxyContext: %v", pc)
 
 		return NewFilterResult(pc, next), nil
