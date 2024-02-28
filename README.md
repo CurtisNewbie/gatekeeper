@@ -9,7 +9,7 @@ Simple custom-made gateway written in Go. This project is internally backed by [
 
 ## Configuration
 
-Check [miso](https://github.com/curtisnewbie/miso) and [gocommon](https://github.com/curtisnewbie/gocommon) for more about configuration.
+See [miso](https://github.com/curtisnewbie/miso) for more about configuration.
 
 | Property                           | Description                                                                 | Default Value |
 | ---------------------------------- | --------------------------------------------------------------------------- | ------------- |
