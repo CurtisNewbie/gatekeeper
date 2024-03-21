@@ -255,7 +255,7 @@ func ProxyRequestHandler(inb *miso.Inbound) {
 
 	if tr.Err != nil {
 		rail.Debugf("post proxy request, request failed, err: %v", tr.Err)
-		if errors.Is(tr.Err, miso.ErrConsulServiceInstanceNotFound) {
+		if errors.Is(tr.Err, miso.ErrServiceInstanceNotFound) {
 			w.WriteHeader(404)
 			return
 		}
