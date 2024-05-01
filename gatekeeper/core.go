@@ -274,11 +274,12 @@ func ProxyRequestHandler(inb *miso.Inbound) {
 	}
 	rail.Debug(w.Header())
 
+	w.WriteHeader(tr.StatusCode)
+
 	// write data from backend to client
 	if tr.Resp.Body != nil {
 		io.Copy(w, tr.Resp.Body)
 	}
-	w.WriteHeader(tr.StatusCode)
 
 	rail.Debugf("proxy request handled")
 }
