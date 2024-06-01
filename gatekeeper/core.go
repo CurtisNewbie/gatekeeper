@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/curtisnewbie/miso/middleware/logbot"
 	"github.com/curtisnewbie/miso/middleware/user-vault/common"
 	"github.com/curtisnewbie/miso/miso"
 	"github.com/prometheus/client_golang/prometheus"
@@ -43,6 +44,7 @@ type ServicePath struct {
 
 func Bootstrap(args []string) {
 	prepareFilters()
+	logbot.EnableLogbotErrLogReport()
 	miso.PreServerBootstrap(prepareServer)
 	miso.BootstrapServer(args)
 }
