@@ -12,6 +12,7 @@ import (
 	"github.com/curtisnewbie/miso/middleware/logbot"
 	"github.com/curtisnewbie/miso/middleware/user-vault/common"
 	"github.com/curtisnewbie/miso/miso"
+	"github.com/curtisnewbie/miso/util"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -20,7 +21,7 @@ var (
 	gatewayClient   *http.Client
 
 	timerHistoVec     *prometheus.HistogramVec = miso.NewPromHistoVec("gatekeeper_request_duration", []string{"url"})
-	timerExclPath                              = miso.NewSet[string]()
+	timerExclPath                              = util.NewSet[string]()
 	histoVecTimerPool                          = sync.Pool{
 		New: func() any {
 			return miso.NewVecTimer(timerHistoVec)
@@ -112,7 +113,7 @@ func parseServicePath(url string) (ServicePath, error) {
 func WrapHealthHandler(handler miso.RawTRouteHandler) miso.RawTRouteHandler {
 
 	healthcheckPath := miso.GetPropStr(miso.PropConsulHealthcheckUrl)
-	if miso.IsBlankStr(healthcheckPath) {
+	if util.IsBlankStr(healthcheckPath) {
 		return handler
 	}
 
@@ -132,7 +133,7 @@ func WrapHealthHandler(handler miso.RawTRouteHandler) miso.RawTRouteHandler {
 func WrapMetricsHandler(handler miso.RawTRouteHandler) miso.RawTRouteHandler {
 
 	metricsEndpoint := miso.GetPropStr(miso.PropMetricsRoute)
-	if !miso.IsBlankStr(metricsEndpoint) {
+	if !util.IsBlankStr(metricsEndpoint) {
 		miso.PerfLogExclPath(metricsEndpoint)
 	}
 
@@ -217,7 +218,7 @@ func ProxyRequestHandler(inb *miso.Inbound) {
 		EnableServiceDiscovery(sp.ServiceName).
 		EnableTracing()
 
-	propagationKeys := miso.NewSet[string]()
+	propagationKeys := util.NewSet[string]()
 	propagationKeys.AddAll(miso.GetPropagationKeys())
 
 	// propagate all headers to client
