@@ -164,15 +164,11 @@ func WrapMetricsHandler(handler miso.RawTRouteHandler) miso.RawTRouteHandler {
 		}
 
 		timer := histoVecTimerPool.Get().(*miso.VecTimer)
+		timer.Reset()
+		defer histoVecTimerPool.Put(timer)
 		handler(inb) // handle the result
 		timer.ObserveDuration(r.URL.Path)
-		PutHistoVecTimerPool(timer)
 	}
-}
-
-func PutHistoVecTimerPool(t *miso.VecTimer) {
-	t.Reset()
-	histoVecTimerPool.Put(t)
 }
 
 func ProxyRequestHandler(inb *miso.Inbound) {
