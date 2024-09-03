@@ -9,7 +9,7 @@ server:
 
 consul:
   enabled: true
-  consulAddress: consul:8500
+  consulAddress: "${CONSUL_HOST}:8500"
 
 logging:
   rolling:
@@ -18,9 +18,9 @@ logging:
 
 jwt:
   key:
-    public: ${jwt-module.publicKey}
-    private: ${jwt-module.privateKey}
-    issuer: "yongj.zhuang-auth-service"
+    public: ${jwt.publicKey}
+    private: ${jwt.privateKey}
+    issuer: ${jwt.issuer}
 
 metrics:
   enabled: true
@@ -30,10 +30,10 @@ metrics:
 
 rabbitmq:
   enabled: true
-  host: "rabbitmq"
+  host: "${RABBITMQ_ADDR}"
   port: 5672
-  username: "${rabbitmqusername}"
-  password: "${rabbitmqpassword}"
+  username: "${RABBITMQ_USERNAME}"
+  password: "${RABBITMQ_PASSWORD}"
   vhost: "/"
 
 gatekeeper.timer.path.excl:
