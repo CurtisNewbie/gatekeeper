@@ -1,19 +1,21 @@
 package gatekeeper
 
 import (
-	"errors"
-	"io"
+	"fmt"
 	"net/http"
 	"net/http/pprof"
+	"path"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/curtisnewbie/miso/middleware/jwt"
 	"github.com/curtisnewbie/miso/middleware/logbot"
 	"github.com/curtisnewbie/miso/middleware/user-vault/common"
 	"github.com/curtisnewbie/miso/miso"
 	"github.com/curtisnewbie/miso/util"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/spf13/cast"
 )
 
 var (
@@ -27,6 +29,13 @@ var (
 			return miso.NewVecTimer(timerHistoVec)
 		},
 	}
+
+	whitelistPatterns []string
+)
+
+const (
+	AttrMetricsTimer = "metrics.timer"
+	AttrAuthInfo     = "GK_AUTH_INFO"
 )
 
 func init() {
@@ -44,7 +53,6 @@ type ServicePath struct {
 }
 
 func Bootstrap(args []string) {
-	prepareFilters()
 	logbot.EnableLogbotErrLogReport()
 	miso.PreServerBootstrap(prepareServer)
 	miso.BootstrapServer(args)
@@ -54,7 +62,6 @@ func prepareServer(rail miso.Rail) error {
 	common.LoadBuiltinPropagationKeys()
 
 	miso.Infof("gatekeeper version: %v", Version)
-
 	miso.SetProp(miso.PropServerPropagateInboundTrace, false)      // disable trace propagation, we are the entry point
 	miso.SetProp(miso.PropServerGenerateEndpointDocEnabled, false) // do not generate apidoc
 	miso.SetProp(miso.PropConsulRegisterDefaultHealthcheck, false) // disable the default health check endpoint to avoid conflicts
@@ -68,15 +75,43 @@ func prepareServer(rail miso.Rail) error {
 	// handle pprof endpoints manually
 	miso.ManualPprofRegister()
 
-	// healthcheck -> metrics -> pprof -> proxy
-	handler :=
-		WrapHealthHandler(
-			WrapMetricsHandler(
-				WrapPprofHandler(ProxyRequestHandler),
-			),
-		)
+	// create proxy
+	proxy := miso.NewHttpProxy("/", ResolveServiceTarget)
 
-	miso.RawAny("/*proxyPath", handler)
+	// healthcheck filter
+	healthcheckPath := miso.GetPropStr(miso.PropConsulHealthcheckUrl)
+	if !util.IsBlankStr(healthcheckPath) {
+		miso.PerfLogExclPath(healthcheckPath)
+		proxy.AddFilter(miso.ProxyFilter{Order: 0, PreRequest: HealthPreFilter})
+	}
+
+	// metrics filter
+	metricsEndpoint := miso.GetPropStr(miso.PropMetricsRoute)
+	if !util.IsBlankStr(metricsEndpoint) {
+		miso.PerfLogExclPath(metricsEndpoint)
+		if miso.GetPropBool(miso.PropMetricsEnabled) {
+			proxy.AddFilter(miso.ProxyFilter{
+				Order:       1,
+				PreRequest:  MetricsPreFilter,
+				PostRequest: MetricsPostFilter,
+			})
+		}
+	}
+
+	// pprof filter
+	if miso.IsProdMode() && !miso.GetPropBool(miso.PropServerPprofEnabled) {
+		miso.PerfLogExclPath("/debug/pprof")
+		miso.PerfLogExclPath("/debug/pprof/cmdline")
+		miso.PerfLogExclPath("/debug/pprof/profile")
+		miso.PerfLogExclPath("/debug/pprof/symbol")
+		miso.PerfLogExclPath("/debug/pprof/trace")
+		proxy.AddFilter(miso.ProxyFilter{Order: 2, PreRequest: PprofPreFilter})
+	}
+
+	// gatekeeper filter
+	proxy.AddFilter(miso.ProxyFilter{Order: 3, PreRequest: AuthPreFilter})
+	proxy.AddFilter(miso.ProxyFilter{Order: 4, PreRequest: AccessPreFilter})
+	proxy.AddFilter(miso.ProxyFilter{Order: 5, PreRequest: TracePreFilter})
 
 	// paths that are not measured by prometheus timer
 	timerExclPath.AddAll(miso.GetPropStrSlice(PropTimerExclPath))
@@ -110,211 +145,218 @@ func parseServicePath(url string) (ServicePath, error) {
 	}, nil
 }
 
-func WrapHealthHandler(handler miso.RawTRouteHandler) miso.RawTRouteHandler {
-
+func HealthPreFilter(pc *miso.ProxyContext) (miso.FilterResult, error) {
 	healthcheckPath := miso.GetPropStr(miso.PropConsulHealthcheckUrl)
-	if util.IsBlankStr(healthcheckPath) {
-		return handler
+
+	// check if it's a healthcheck endpoint (for consul), we don't really return anything, so it's fine to expose it
+	if pc.ProxyPath == healthcheckPath {
+		w, _ := pc.Inb.Unwrap()
+		w.WriteHeader(200)
+		return miso.FilterResult{Next: false}, nil
 	}
 
-	miso.PerfLogExclPath(healthcheckPath)
-	return func(inb *miso.Inbound) {
-		w, r := inb.Unwrap()
-		// check if it's a healthcheck endpoint (for consul), we don't really return anything, so it's fine to expose it
-		if r.URL.Path == healthcheckPath {
-			w.WriteHeader(200)
-			return
-		}
-
-		handler(inb)
-	}
+	return miso.FilterResult{Next: true}, nil
 }
 
-func WrapMetricsHandler(handler miso.RawTRouteHandler) miso.RawTRouteHandler {
-
+func MetricsPreFilter(pc *miso.ProxyContext) (miso.FilterResult, error) {
 	metricsEndpoint := miso.GetPropStr(miso.PropMetricsRoute)
-	if !util.IsBlankStr(metricsEndpoint) {
-		miso.PerfLogExclPath(metricsEndpoint)
-	}
-
-	if !miso.GetPropBool(miso.PropMetricsEnabled) {
-		return func(inb *miso.Inbound) {
-			w, r := inb.Unwrap()
-			rail := inb.Rail()
-			if r.URL.Path == metricsEndpoint {
-				rail.Warnf("Invalid request, metrics endpoint is disabled")
-				w.WriteHeader(404)
-				return
-			}
-			handler(inb)
-		}
-	}
-
 	prometheusHandler := miso.PrometheusHandler()
-	return func(inb *miso.Inbound) {
-		w, r := inb.Unwrap()
+	w, r := pc.Inb.Unwrap()
 
-		if r.URL.Path == metricsEndpoint {
-			prometheusHandler.ServeHTTP(w, r)
-			return
-		}
+	if r.URL.Path == metricsEndpoint {
+		prometheusHandler.ServeHTTP(w, r)
+		return miso.FilterResult{Next: false}, nil
+	}
 
-		if timerExclPath.Has(r.URL.Path) {
-			handler(inb)
-			return
-		}
+	if timerExclPath.Has(r.URL.Path) {
+		return miso.FilterResult{Next: true}, nil
+	}
 
-		timer := histoVecTimerPool.Get().(*miso.VecTimer)
-		timer.Reset()
+	timer := histoVecTimerPool.Get().(*miso.VecTimer)
+	timer.Reset()
+	pc.SetAttr(AttrMetricsTimer, timer)
+	return miso.FilterResult{Next: true}, nil
+}
+
+func MetricsPostFilter(pc *miso.ProxyContext) {
+	v, ok := pc.GetAttr(AttrMetricsTimer)
+	if !ok {
+		return
+	}
+	pc.DelAttr(AttrMetricsTimer)
+	if timer, ok := v.(*miso.VecTimer); ok {
 		defer histoVecTimerPool.Put(timer)
-		handler(inb) // handle the result
-		timer.ObserveDuration(r.URL.Path)
+		timer.ObserveDuration(pc.ProxyPath)
 	}
 }
 
-func ProxyRequestHandler(inb *miso.Inbound) {
-	rail := inb.Rail()
-	w, r := inb.Unwrap()
-	rail.Debugf("Request: %v %v, headers: %v", r.Method, r.URL.Path, r.Header)
+func PprofPreFilter(pc *miso.ProxyContext) (miso.FilterResult, error) {
+	w, r := pc.Inb.Unwrap()
+	if r.URL.Path == "/debug/pprof/cmdline" {
+		pprof.Cmdline(w, r)
+		return miso.FilterResult{Next: false}, nil
+	} else if r.URL.Path == "/debug/pprof/profile" {
+		pprof.Profile(w, r)
+		return miso.FilterResult{Next: false}, nil
+	} else if r.URL.Path == "/debug/pprof/symbol" {
+		pprof.Symbol(w, r)
+		return miso.FilterResult{Next: false}, nil
+	} else if r.URL.Path == "/debug/pprof/trace" {
+		pprof.Trace(w, r)
+		return miso.FilterResult{Next: false}, nil
+	} else if strings.HasPrefix(r.URL.Path, "/debug/pprof") {
+		pprof.Index(w, r)
+		return miso.FilterResult{Next: false}, nil
+	}
+	return miso.FilterResult{Next: true}, nil
+}
+
+type GatewayError struct {
+	StatusCode int
+}
+
+func (g GatewayError) Status() int {
+	return g.StatusCode
+}
+
+func (g GatewayError) Error() string {
+	return fmt.Sprintf("gateway error, %v", g.StatusCode)
+}
+
+func ResolveServiceTarget(rail miso.Rail, proxyPath string) (string, error) {
+	if proxyPath == miso.GetPropStr(miso.PropConsulHealthcheckUrl) {
+		return proxyPath, nil
+	}
+	if proxyPath == miso.GetPropStr(miso.PropMetricsRoute) {
+		return proxyPath, nil
+	}
+	if strings.HasPrefix(proxyPath, "/debug/pprof") {
+		return proxyPath, nil
+	}
 
 	// parse the request path, extract service name, and the relative url for the backend server
 	var sp ServicePath
 	var err error
-	if sp, err = parseServicePath(r.URL.Path); err != nil {
-		rail.Warnf("Invalid request, %v", err)
-		w.WriteHeader(404)
-		return
+	if sp, err = parseServicePath(proxyPath); err != nil {
+		miso.Warnf("Invalid request, %v", err)
+		return "", GatewayError{StatusCode: 404}
 	}
-	rail.Debugf("parsed service path: %#v", sp)
-
-	pc := NewProxyContext(rail, inb)
-	pc.SetAttr(SERVICE_PATH, sp)
-
-	filters := GetFilters()
-	for i := range filters {
-		fr, err := filters[i](pc)
-		if err != nil || !fr.Next {
-			rail.Debugf("request filtered, err: %v, ok: %v", err, fr)
-			if err != nil {
-				inb.HandleResult(miso.WrapResp(rail, nil, err, r.RequestURI), nil)
-				return
-			}
-
-			return // discontinue, the filter should write the response itself, e.g., returning a 403 status code
-		}
-		pc = fr.ProxyContext // replace the ProxyContext, trace may be set
+	miso.Debugf("parsed service path: %#v", sp)
+	target, err := miso.GetServiceRegistry().ResolveUrl(miso.EmptyRail(), sp.ServiceName, sp.Path)
+	if err != nil {
+		miso.Warnf("ServiceRegistry ResolveUrl failed, %v", err)
+		return "", GatewayError{StatusCode: 404}
 	}
-
-	// continue propgating the trace
-	rail = pc.Rail
-
-	// route requests dynamically using service discovery
-	relPath := sp.Path
-	if r.URL.RawQuery != "" {
-		relPath += "?" + r.URL.RawQuery
-	}
-	cli := miso.NewTClient(rail, relPath).
-		UseClient(gatewayClient).
-		EnableServiceDiscovery(sp.ServiceName).
-		EnableTracing()
-
-	propagationKeys := util.NewSet[string]()
-	propagationKeys.AddAll(miso.GetPropagationKeys())
-
-	// propagate all headers to client
-	for k, arr := range r.Header {
-		// the inbound request may contain headers that are one of our propagation keys
-		// this can be a security problem
-		if propagationKeys.Has(k) {
-			continue
-		}
-		for _, v := range arr {
-			cli.AddHeader(k, v)
-		}
-	}
-
-	var tr *miso.TResponse
-	switch r.Method {
-	case http.MethodGet:
-		tr = cli.Get()
-	case http.MethodPut:
-		tr = cli.Put(r.Body)
-	case http.MethodPost:
-		tr = cli.Post(r.Body)
-	case http.MethodDelete:
-		tr = cli.Delete()
-	case http.MethodHead:
-		tr = cli.Head()
-	case http.MethodOptions:
-		tr = cli.Options()
-	default:
-		w.WriteHeader(404)
-		return
-	}
-
-	if tr.Err != nil {
-		rail.Debugf("post proxy request, request failed, err: %v", tr.Err)
-		if errors.Is(tr.Err, miso.ErrServiceInstanceNotFound) {
-			w.WriteHeader(404)
-			return
-		}
-		inb.HandleResult(miso.WrapResp(rail, nil, tr.Err, r.RequestURI), nil)
-		return
-	}
-	defer tr.Close()
-
-	rail.Debugf("post proxy request, proxied response headers: %v, status: %v", tr.RespHeader, tr.StatusCode)
-
-	// headers from backend servers
-	for k, v := range tr.RespHeader {
-		for _, hv := range v {
-			w.Header().Add(k, hv)
-		}
-	}
-	rail.Debug(w.Header())
-
-	w.WriteHeader(tr.StatusCode)
-
-	// write data from backend to client
-	if tr.Resp.Body != nil {
-		io.Copy(w, tr.Resp.Body)
-	}
-
-	rail.Debugf("proxy request handled")
+	return target, nil
 }
 
-func WrapPprofHandler(handler miso.RawTRouteHandler) miso.RawTRouteHandler {
+func AuthPreFilter(pc *miso.ProxyContext) (miso.FilterResult, error) {
+	rail := pc.Rail
+	_, r := pc.Inb.Unwrap()
+	authorization := r.Header.Get("Authorization")
+	rail.Debugf("Authorization: %v", authorization)
 
-	if miso.IsProdMode() && !miso.GetPropBool(miso.PropServerPprofEnabled) {
-		return handler
+	// no token available
+	if authorization == "" {
+		return miso.FilterResult{Next: true}, nil
 	}
 
-	miso.PerfLogExclPath("/debug/pprof")
-	miso.PerfLogExclPath("/debug/pprof/cmdline")
-	miso.PerfLogExclPath("/debug/pprof/profile")
-	miso.PerfLogExclPath("/debug/pprof/symbol")
-	miso.PerfLogExclPath("/debug/pprof/trace")
+	// decode jwt token, extract claims and build a user struct as attr
+	tkn, err := jwt.JwtDecode(authorization)
+	rail.Debugf("DecodeToken, tkn: %v, err: %v", tkn, err)
 
-	return func(inb *miso.Inbound) {
-		w, r := inb.Unwrap()
+	// token invalid, but the public endpoints are still accessible, so we don't stop here
+	if err != nil || !tkn.Valid {
+		rail.Debugf("Token invalid, %v", err)
+		return miso.FilterResult{Next: true}, nil
+	}
 
-		if r.URL.Path == "/debug/pprof/cmdline" {
-			pprof.Cmdline(w, r)
-			return
-		} else if r.URL.Path == "/debug/pprof/profile" {
-			pprof.Profile(w, r)
-			return
-		} else if r.URL.Path == "/debug/pprof/symbol" {
-			pprof.Symbol(w, r)
-			return
-		} else if r.URL.Path == "/debug/pprof/trace" {
-			pprof.Trace(w, r)
-			return
-		} else if strings.HasPrefix(r.URL.Path, "/debug/pprof") {
-			pprof.Index(w, r)
-			return
+	// extract the user info from it
+	claims := tkn.Claims
+	var user common.User
+
+	if v, ok := claims["username"]; ok {
+		user.Username = cast.ToString(v)
+	}
+	if v, ok := claims["userno"]; ok {
+		user.UserNo = cast.ToString(v)
+	}
+	if v, ok := claims["roleno"]; ok {
+		user.RoleNo = cast.ToString(v)
+	}
+	pc.SetAttr(AttrAuthInfo, user)
+	rail.Debugf("user: %#v", user)
+	rail.Debugf("set user to proxyContext: %v", pc)
+
+	return miso.FilterResult{Next: true}, nil
+}
+
+func AccessPreFilter(pc *miso.ProxyContext) (miso.FilterResult, error) {
+	w, r := pc.Inb.Unwrap()
+	rail := pc.Rail
+
+	rail.Debugf("proxyContext: %v", pc)
+
+	var roleNo string
+	var u common.User = common.NilUser()
+
+	if v, ok := pc.GetAttr(AttrAuthInfo); ok && v != nil {
+		u = v.(common.User)
+		roleNo = u.RoleNo
+	}
+
+	inWhitelist := false
+	for _, pat := range whitelistPatterns {
+		if ok, _ := path.Match(pat, r.URL.Path); ok {
+			inWhitelist = true
+			break
+		}
+	}
+
+	var cr CheckResAccessResp
+	if inWhitelist {
+		cr = CheckResAccessResp{true}
+	} else {
+		var err error
+		cr, err = ValidateResourceAccess(*rail, CheckResAccessReq{
+			Url:    r.URL.Path,
+			Method: r.Method,
+			RoleNo: roleNo,
+		})
+
+		if err != nil {
+			w.WriteHeader(http.StatusForbidden)
+			rail.Warnf("Request forbidden, err: %v", err)
+			return miso.FilterResult{Next: false}, nil
+		}
+	}
+
+	if !cr.Valid {
+		rail.Warnf("Request forbidden (resource access not authorized), url: %v, user: %+v", r.URL.Path, u)
+
+		// authenticated, but doesn't have enough authority to access the endpoint
+		if !u.IsNil {
+			w.WriteHeader(http.StatusForbidden)
+			return miso.FilterResult{Next: false}, nil
 		}
 
-		handler(inb)
+		// token invalid or expired
+		w.WriteHeader(http.StatusUnauthorized)
+		return miso.FilterResult{Next: false}, nil
 	}
+
+	return miso.FilterResult{Next: true}, nil
+}
+
+func TracePreFilter(pc *miso.ProxyContext) (miso.FilterResult, error) {
+	v, ok := pc.GetAttr(AttrAuthInfo)
+
+	if !ok || v == nil { // not authenticated
+		return miso.FilterResult{Next: true}, nil
+	}
+
+	u := v.(common.User)
+	*pc.Rail = common.StoreUser(*pc.Rail, u)
+	pc.Rail.Debugf("Setup trace for user info, rail: %+v", pc.Rail)
+	return miso.FilterResult{Next: true}, nil
 }
