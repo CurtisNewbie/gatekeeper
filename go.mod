@@ -3,7 +3,7 @@ module github.com/curtisnewbie/gatekeeper
 go 1.18
 
 require (
-	github.com/curtisnewbie/miso v0.1.10-beta.2.0.20241002164854-00859e344cc8
+	github.com/curtisnewbie/miso v0.1.10-beta.3
 	github.com/prometheus/client_golang v1.4.0
 	github.com/spf13/cast v1.6.0
 )

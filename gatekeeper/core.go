@@ -7,7 +7,6 @@ import (
 	"path"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/curtisnewbie/miso/middleware/jwt"
 	"github.com/curtisnewbie/miso/middleware/logbot"
@@ -20,7 +19,6 @@ import (
 
 var (
 	errPathNotFound = miso.NewErrf("Path not found")
-	gatewayClient   *http.Client
 
 	timerHistoVec     *prometheus.HistogramVec = miso.NewPromHistoVec("gatekeeper_request_duration", []string{"url"})
 	timerExclPath                              = util.NewSet[string]()
@@ -34,18 +32,12 @@ var (
 )
 
 const (
-	AttrMetricsTimer = "metrics.timer"
-	AttrAuthInfo     = "GK_AUTH_INFO"
-)
+	AttrMetricsTimer = "gk.metrics.timer"
+	AuthInfo         = "gk.auth.info"
 
-func init() {
-	gatewayClient = &http.Client{Timeout: 0}
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.MaxIdleConns = 1500
-	transport.MaxIdleConnsPerHost = 1000
-	transport.IdleConnTimeout = time.Minute * 10 // make sure that we can maximize the re-use of connnections
-	gatewayClient.Transport = transport
-}
+	PropTimerExclPath         = "gatekeeper.timer.path.excl"
+	PropWhitelistPathPatterns = "gatekeeper.whitelist.path.patterns"
+)
 
 type ServicePath struct {
 	ServiceName string
@@ -59,21 +51,15 @@ func Bootstrap(args []string) {
 }
 
 func prepareServer(rail miso.Rail) error {
-	common.LoadBuiltinPropagationKeys()
 
 	miso.Infof("gatekeeper version: %v", Version)
-	miso.SetProp(miso.PropServerPropagateInboundTrace, false)      // disable trace propagation, we are the entry point
-	miso.SetProp(miso.PropServerGenerateEndpointDocEnabled, false) // do not generate apidoc
-	miso.SetProp(miso.PropConsulRegisterDefaultHealthcheck, false) // disable the default health check endpoint to avoid conflicts
+
+	// disable trace propagation, we are the entry point
+	common.LoadBuiltinPropagationKeys()
+	miso.SetProp(miso.PropServerPropagateInboundTrace, false)
 
 	// whitelisted path patterns
 	whitelistPatterns = miso.GetPropStrSlice(PropWhitelistPathPatterns)
-
-	// bootstrap metrics and prometheus stuff manually
-	miso.ManualBootstrapPrometheus()
-
-	// handle pprof endpoints manually
-	miso.ManualPprofRegister()
 
 	// create proxy
 	proxy := miso.NewHttpProxy("/", ResolveServiceTarget)
@@ -151,7 +137,11 @@ func HealthPreFilter(pc *miso.ProxyContext) (miso.FilterResult, error) {
 	// check if it's a healthcheck endpoint (for consul), we don't really return anything, so it's fine to expose it
 	if pc.ProxyPath == healthcheckPath {
 		w, _ := pc.Inb.Unwrap()
-		w.WriteHeader(200)
+		if miso.IsHealthcheckPass(*pc.Rail) {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
 		return miso.FilterResult{Next: false}, nil
 	}
 
@@ -284,7 +274,7 @@ func AuthPreFilter(pc *miso.ProxyContext) (miso.FilterResult, error) {
 	if v, ok := claims["roleno"]; ok {
 		user.RoleNo = cast.ToString(v)
 	}
-	pc.SetAttr(AttrAuthInfo, user)
+	pc.SetAttr(AuthInfo, user)
 	rail.Debugf("user: %#v", user)
 	rail.Debugf("set user to proxyContext: %v", pc)
 
@@ -300,7 +290,7 @@ func AccessPreFilter(pc *miso.ProxyContext) (miso.FilterResult, error) {
 	var roleNo string
 	var u common.User = common.NilUser()
 
-	if v, ok := pc.GetAttr(AttrAuthInfo); ok && v != nil {
+	if v, ok := pc.GetAttr(AuthInfo); ok && v != nil {
 		u = v.(common.User)
 		roleNo = u.RoleNo
 	}
@@ -349,7 +339,7 @@ func AccessPreFilter(pc *miso.ProxyContext) (miso.FilterResult, error) {
 }
 
 func TracePreFilter(pc *miso.ProxyContext) (miso.FilterResult, error) {
-	v, ok := pc.GetAttr(AttrAuthInfo)
+	v, ok := pc.GetAttr(AuthInfo)
 
 	if !ok || v == nil { // not authenticated
 		return miso.FilterResult{Next: true}, nil
