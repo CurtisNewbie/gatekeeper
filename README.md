@@ -2,7 +2,7 @@
 
 Simple custom-made gateway written in Go. This project is internally backed by [curtisnewbie/miso](https://github.com/curtisnewbie/miso).
 
-> **_This project is part of a monorepo ([https://github.com/CurtisNewbie/moon-monorepo](https://github.com/CurtisNewbie/moon-monorepo))._**
+> **_This project is part of the monorepo ([https://github.com/CurtisNewbie/moon-monorepo](https://github.com/CurtisNewbie/moon-monorepo)). This repo is nolonger maintained, latest changes are commited to the monorepo instead._**
 
 ## Dependencies
 
